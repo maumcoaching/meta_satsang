@@ -25,6 +25,30 @@ export const Environment: React.FC = () => {
     return { positions: pos, randomSpeeds: speeds };
   }, []);
 
+  // 부드러운 원형 꽃잎 셰이더 (사각형 파티클 방지)
+  const petalMaterial = useMemo(() => {
+    return new THREE.ShaderMaterial({
+      vertexShader: `
+        void main() {
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = clamp(24.0 * (100.0 / -mvPosition.z), 2.0, 32.0);
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        void main() {
+          vec2 coord = gl_PointCoord - vec2(0.5);
+          float d = length(coord);
+          if (d > 0.5) discard;
+          float alpha = smoothstep(0.5, 0.1, d) * 0.65;
+          gl_FragColor = vec4(0.98, 0.81, 0.91, alpha);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+    });
+  }, []);
+
   useFrame((state, delta) => {
     const time = state.clock.getElapsedTime();
 
@@ -85,7 +109,7 @@ export const Environment: React.FC = () => {
       <ambientLight intensity={0.55} color="#ffffff" />
 
       {/* 6. 공중에 나부끼는 꽃잎/빛가루 */}
-      <points ref={particlesRef}>
+      <points ref={particlesRef} material={petalMaterial}>
         <bufferGeometry>
           <bufferAttribute
             attach="attributes-position"
@@ -94,13 +118,6 @@ export const Environment: React.FC = () => {
             itemSize={3}
           />
         </bufferGeometry>
-        <pointsMaterial
-          size={0.15}
-          color="#fbcfe8"
-          transparent
-          opacity={0.65}
-          depthWrite={false}
-        />
       </points>
     </>
   );

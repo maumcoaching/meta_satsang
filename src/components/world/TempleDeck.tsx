@@ -1,30 +1,14 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { sound } from '../audio/SoundEffects';
+import { IncenseSmoke } from './IncenseSmoke';
 
 export const TempleDeck: React.FC = () => {
   const bellRef = useRef<THREE.Group>(null);
   const lanternLightRef = useRef<THREE.PointLight>(null);
-  const smokeParticles = useRef<THREE.Points>(null);
 
-  // 향로 연기 파티클 생성
-  const particleCount = 45;
-  const { positions, velocities } = useMemo(() => {
-    const pos = new Float32Array(particleCount * 3);
-    const vel = new Float32Array(particleCount * 3);
-
-    for (let i = 0; i < particleCount; i++) {
-      pos[i * 3 + 0] = (Math.random() - 0.5) * 0.15;
-      pos[i * 3 + 1] = Math.random() * 0.8;
-      pos[i * 3 + 2] = (Math.random() - 0.5) * 0.15;
-
-      vel[i * 3 + 1] = 0.3 + Math.random() * 0.3; // 위로 서서히 상승
-    }
-    return { positions: pos, velocities: vel };
-  }, []);
-
-  useFrame((state, delta) => {
+  useFrame((state) => {
     const time = state.clock.getElapsedTime();
 
     // 1. 바람에 살랑이는 풍경(종) 흔들림
@@ -36,25 +20,6 @@ export const TempleDeck: React.FC = () => {
     // 2. 석등 불빛의 따뜻한 깜빡임
     if (lanternLightRef.current) {
       lanternLightRef.current.intensity = 1.6 + Math.sin(time * 6) * 0.2 + Math.cos(time * 14) * 0.1;
-    }
-
-    // 3. 향 연기 입자 서서히 피어오르기
-    if (smokeParticles.current) {
-      const posAttr = smokeParticles.current.geometry.attributes.position as THREE.BufferAttribute;
-      const array = posAttr.array as Float32Array;
-
-      for (let i = 0; i < particleCount; i++) {
-        array[i * 3 + 1] += velocities[i * 3 + 1] * delta;
-        // 바람에 살짝 흩날림
-        array[i * 3 + 0] += Math.sin(time * 2 + i) * 0.002;
-
-        if (array[i * 3 + 1] > 1.2) {
-          array[i * 3 + 1] = 0;
-          array[i * 3 + 0] = (Math.random() - 0.5) * 0.12;
-          array[i * 3 + 2] = (Math.random() - 0.5) * 0.12;
-        }
-      }
-      posAttr.needsUpdate = true;
     }
   });
 
@@ -196,31 +161,9 @@ export const TempleDeck: React.FC = () => {
             <cylinderGeometry args={[0.005, 0.005, 0.16, 8]} />
             <meshBasicMaterial color="#b91c1c" />
           </mesh>
-          {/* 향 끝의 붉은 불씨 */}
-          <mesh position={[0, 0.22, 0]}>
-            <sphereGeometry args={[0.012, 8, 8]} />
-            <meshBasicMaterial color="#ff4400" />
-          </mesh>
+          {/* 극사실적 가우시안 향 연기 & 은은한 불씨 */}
+          <IncenseSmoke />
         </group>
-
-        {/* 피어오르는 향 연기 파티클 */}
-        <points ref={smokeParticles} position={[0, 0.52, 0]}>
-          <bufferGeometry>
-            <bufferAttribute
-              attach="attributes-position"
-              count={particleCount}
-              array={positions}
-              itemSize={3}
-            />
-          </bufferGeometry>
-          <pointsMaterial
-            size={0.12}
-            color="#e2e8f0"
-            transparent
-            opacity={0.35}
-            depthWrite={false}
-          />
-        </points>
       </group>
 
       {/* 9. 석등 (Stone Lantern) - 대청마루 진입로 옆 */}

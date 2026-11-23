@@ -61,7 +61,8 @@ export const Character: React.FC = () => {
       const dy = e.clientY - prevMouse.current.y;
       prevMouse.current = { x: e.clientX, y: e.clientY };
 
-      camAngleX.current -= dx * 0.005;
+      // 화면 드래그 방향으로 직관적인 시점 회전
+      camAngleX.current += dx * 0.005;
       camAngleY.current = Math.max(0.05, Math.min(1.2, camAngleY.current + dy * 0.005));
     };
 
@@ -100,15 +101,24 @@ export const Character: React.FC = () => {
     const inputLength = Math.hypot(moveX, moveZ);
     const isMoving = inputLength > 0.1 && !sharedControls.meditate && !sharedControls.bow;
 
-    // 2. 이동 및 카메라 기준 방향 변환
+    // 2. 이동 및 카메라 시점 기준 직관적인 방향 변환
     if (isMoving) {
-      const moveAngle = Math.atan2(moveX, moveZ) + camAngleX.current;
       const speed = 4.2;
+      const inputForward = -moveZ; // W / 조이스틱 위로 = +1
 
-      position.current.x += Math.sin(moveAngle) * speed * delta;
-      position.current.z += Math.cos(moveAngle) * speed * delta;
+      // 카메라가 바라보는 방향을 기준으로 월드 이동 벡터 계산
+      const worldMoveX = Math.cos(camAngleX.current) * moveX - Math.sin(camAngleX.current) * inputForward;
+      const worldMoveZ = -Math.sin(camAngleX.current) * moveX - Math.cos(camAngleX.current) * inputForward;
 
-      const targetRotation = moveAngle;
+      const norm = Math.hypot(worldMoveX, worldMoveZ);
+      const dirX = worldMoveX / norm;
+      const dirZ = worldMoveZ / norm;
+
+      position.current.x += dirX * Math.min(inputLength, 1) * speed * delta;
+      position.current.z += dirZ * Math.min(inputLength, 1) * speed * delta;
+
+      // 캐릭터가 이동하는 방향을 바라보도록 부드럽게 회전
+      const targetRotation = Math.atan2(dirX, dirZ);
       let diff = targetRotation - currentRotation.current;
       while (diff < -Math.PI) diff += Math.PI * 2;
       while (diff > Math.PI) diff -= Math.PI * 2;
@@ -208,11 +218,11 @@ export const Character: React.FC = () => {
       }
     }
 
-    // 5. 3인칭 추적 카메라
+    // 5. 3인칭 추적 카메라 (등 뒤에서 앞으로 바라보는 정방향 시점)
     const camDistance = 4.8;
-    const targetCamX = position.current.x - Math.sin(camAngleX.current) * Math.cos(camAngleY.current) * camDistance;
+    const targetCamX = position.current.x + Math.sin(camAngleX.current) * Math.cos(camAngleY.current) * camDistance;
     const targetCamY = position.current.y + Math.sin(camAngleY.current) * camDistance + 1.2;
-    const targetCamZ = position.current.z - Math.cos(camAngleX.current) * Math.cos(camAngleY.current) * camDistance;
+    const targetCamZ = position.current.z + Math.cos(camAngleX.current) * Math.cos(camAngleY.current) * camDistance;
 
     camera.position.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), delta * 6);
     camera.lookAt(position.current.x, position.current.y + 0.85, position.current.z);

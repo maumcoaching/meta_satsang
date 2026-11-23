@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Volume2, VolumeX, Bell, Music, HelpCircle, Sparkles, X } from 'lucide-react';
+import { Volume2, VolumeX, Bell, HelpCircle, Sparkles, X } from 'lucide-react';
 import { sound } from '../audio/SoundEffects';
 import { multiplayer } from '../multiplayer/MultiplayerService';
-import confetti from 'canvas-confetti';
 
 const SERENE_NAMES = [
   '고요한 구름',
@@ -33,7 +32,6 @@ export const OverlayUI: React.FC = () => {
   const [showHelp, setShowHelp] = useState(false);
   const [showWisdom, setShowWisdom] = useState(false);
   const [currentWisdom, setCurrentWisdom] = useState('');
-  const [moktakCount, setMoktakCount] = useState(0);
 
   useEffect(() => {
     // 닉네임 연동 및 멀티플레이어 접속자 수 구독
@@ -49,21 +47,6 @@ export const OverlayUI: React.FC = () => {
       unsub();
     };
   }, []);
-
-  const handleMoktakClick = () => {
-    sound.playMoktak();
-    setMoktakCount((prev) => prev + 1);
-
-    // 10회마다 작은 힐링 축하 꽃가루
-    if ((moktakCount + 1) % 10 === 0) {
-      confetti({
-        particleCount: 25,
-        spread: 60,
-        origin: { y: 0.8 },
-        colors: ['#f472b6', '#fed7aa', '#fde047'],
-      });
-    }
-  };
 
   const handleBellClick = () => {
     sound.playSingingBowl();
@@ -127,42 +110,18 @@ export const OverlayUI: React.FC = () => {
             />
             <span
               style={{
-                fontSize: 13,
+                fontSize: 11,
                 color: '#e2e8f0',
                 textShadow: '0 1px 4px rgba(0,0,0,0.5)',
               }}
             >
-              내 이름: <strong>{nickname}</strong> &nbsp;·&nbsp; 🟢 도량에 함께 머무는 이: <strong>{onlineCount}명</strong>
+              <strong>{nickname}</strong> &nbsp;·&nbsp; 함께하는 이: <strong>{onlineCount}명</strong>
             </span>
           </div>
         </div>
 
         {/* 우측 퀵 컨트롤 버튼들 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'auto' }}>
-          {/* 목탁 치기 버튼 */}
-          <button
-            onClick={handleMoktakClick}
-            title="목탁 치기"
-            style={{
-              padding: '8px 14px',
-              borderRadius: 20,
-              backgroundColor: 'rgba(255, 255, 255, 0.88)',
-              border: 'none',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              fontSize: 13,
-              fontWeight: 600,
-              color: '#451a03',
-              backdropFilter: 'blur(8px)',
-            }}
-          >
-            <span>🪵</span>
-            <span>목탁 치기 {moktakCount > 0 && `(${moktakCount})`}</span>
-          </button>
-
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, pointerEvents: 'auto' }}>
           {/* 범종 / 싱잉볼 버튼 */}
           <button
             onClick={handleBellClick}

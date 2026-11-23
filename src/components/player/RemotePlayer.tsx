@@ -148,29 +148,25 @@ export const RemotePlayer: React.FC<Props> = ({ player }) => {
 
   return (
     <group ref={group}>
-      {/* 머리 위 닉네임 명찰 배지 (모바일 최적화: 25% 초소형 컴팩트) */}
-      <Html position={[0, 1.25, 0]} center distanceFactor={26}>
+      {/* 머리 위 닉네임 명찰 배지 (모바일 최적화: distanceFactor 3.5로 실제 화면 너비 25% 구현) */}
+      <Html position={[0, 1.18, 0]} center distanceFactor={3.5}>
         <div
           style={{
-            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backgroundColor: 'rgba(15, 23, 42, 0.68)',
             backdropFilter: 'blur(3px)',
             color: '#f8fafc',
-            padding: '1px 5px',
+            padding: '2px 6px',
             borderRadius: 6,
-            fontSize: 9,
+            fontSize: 10,
             fontWeight: 500,
             whiteSpace: 'nowrap',
             pointerEvents: 'none',
             border: '1px solid rgba(255, 255, 255, 0.2)',
-            boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 2,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
             lineHeight: 1.2,
           }}
         >
-          <span style={{ fontSize: 8 }}>🪷</span>
-          <span>{player.nickname}</span>
+          {player.nickname}
         </div>
       </Html>
 

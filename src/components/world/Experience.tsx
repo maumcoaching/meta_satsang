@@ -2,6 +2,7 @@ import React, { Suspense } from 'react';
 import { Environment } from './Environment';
 import { Ground } from './Ground';
 import { TempleDeck } from './TempleDeck';
+import { CircleDeck } from './CircleDeck';
 import { Character } from '../player/Character';
 import { RemotePlayers } from '../player/RemotePlayers';
 
@@ -16,6 +17,9 @@ export const Experience: React.FC = () => {
 
       {/* 대청마루, 기와지붕, 기둥, 풍경, 석등, 좌복 */}
       <TempleDeck />
+
+      {/* 연못 너머 대형 원형 밝은 원목 삿상 데크 플라자 */}
+      <CircleDeck />
 
       {/* 내 플레이어 아바타 및 3인칭 추종 카메라 */}
       <Character />

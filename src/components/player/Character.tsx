@@ -17,6 +17,15 @@ function getGroundHeight(x: number, z: number): number {
   if (Math.abs(x) <= 0.6 && z >= 3.4 && z <= 16.0) {
     return 0.05;
   }
+  // 연못 너머 대형 원형 밝은 원목 데크 (중심: x=-24, z=12, 반경: 14m, 높이: 0.18)
+  const distToCircleDeck = Math.hypot(x - (-24), z - 12);
+  if (distToCircleDeck <= 14.1) {
+    return 0.18;
+  }
+  // 연못에서 원형 데크로 이어지는 연결 디딤돌
+  if (x >= -15.0 && x <= -9.0 && z >= 4.0 && z <= 10.5) {
+    return 0.05;
+  }
   return 0.0;
 }
 

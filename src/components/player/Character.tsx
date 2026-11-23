@@ -8,16 +8,23 @@ import { multiplayer } from '../multiplayer/MultiplayerService';
 
 // 지형 및 건축물 높이 감지 함수
 function getGroundHeight(x: number, z: number): number {
-  if (Math.abs(x) <= 4.0 && Math.abs(z) <= 3.0) {
-    return 0.45;
+  // 1. 대형 확장 법당 내부 및 마루 (폭: x in [-6.8, 6.8], 깊이: z in [-6.8, 6.3], 마루 높이: 0.45m)
+  if (Math.abs(x) <= 6.8 && z >= -6.8 && z <= 6.3) {
+    // 중앙 불단 (수미단: 폭 5.5m, 깊이 1.5m, 높이 1.32m)
+    if (Math.abs(x) <= 2.75 && z <= -4.8) {
+      return 1.32;
+    }
+    return 0.45; // 원목 대청마루 바닥
   }
-  if (Math.abs(x) <= 4.2 && Math.abs(z) <= 3.2) {
-    return 0.40;
+  // 2. 법당 앞 기단 돌계단 (z in [6.3, 7.6], x in [-2.5, 2.5], 높이: 0.22m)
+  if (Math.abs(x) <= 2.5 && z >= 6.3 && z <= 7.6) {
+    return 0.22;
   }
-  if (Math.abs(x) <= 0.6 && z >= 3.4 && z <= 16.0) {
+  // 3. 디딤돌 돌길 (디딤돌 높이: 0.05)
+  if (Math.abs(x) <= 0.8 && z >= 7.6 && z <= 16.0) {
     return 0.05;
   }
-  // 연못 너머 대형 원형 밝은 원목 데크 - 서원동산 (중심: x=-24, z=12, 반경: 14m, 높이: 0.18)
+  // 4. 서원동산 대형 원형 데크 - 서원동산 (중심: x=-24, z=12, 반경: 14m, 높이: 0.18)
   const distToCircleDeck = Math.hypot(x - (-24), z - 12);
   if (distToCircleDeck <= 14.1) {
     // 서원동산 중앙 화강암 석조 좌대 (중심: x=-24, z=12, 폭 1.7m, 좌대 높이 1.27m)
@@ -30,7 +37,7 @@ function getGroundHeight(x: number, z: number): number {
     }
     return 0.18; // 금강좌 뒤편 순례 보행로를 포함한 서원동산 원목 데크 바닥
   }
-  // 연못에서 원형 데크로 이어지는 연결 디딤돌
+  // 5. 연못에서 원형 데크로 이어지는 연결 디딤돌
   if (x >= -15.0 && x <= -9.0 && z >= 4.0 && z <= 10.5) {
     return 0.05;
   }
@@ -50,7 +57,7 @@ export const Character: React.FC = () => {
   const BASE_BODY_Y = 0.66;
 
   // 물리 및 위치 상태
-  const position = useRef(new THREE.Vector3(0, 0, 5));
+  const position = useRef(new THREE.Vector3(0, 0.45, 4.5)); // 법당 안쪽 입구 (좌복 30장과 불단을 마주보고 시작)
   const velocityY = useRef(0);
   const isGrounded = useRef(true);
   const currentRotation = useRef(0);
@@ -133,6 +140,21 @@ export const Character: React.FC = () => {
 
       position.current.x += dirX * Math.min(inputLength, 1) * speed * delta;
       position.current.z += dirZ * Math.min(inputLength, 1) * speed * delta;
+
+      // 법당 3면 벽체(뒷벽, 양옆벽) 및 전면 출입문 충돌 경계
+      if (position.current.z < 6.2 && position.current.z > -6.8 && Math.abs(position.current.x) < 6.8) {
+        position.current.z = Math.max(-6.4, position.current.z);
+        position.current.x = Math.max(-6.4, Math.min(6.4, position.current.x));
+        // 전면 벽: 중앙 열린 문(x: [-1.8, 1.8]) 외에는 전면 벽에 막힘
+        if (position.current.z > 6.1 && Math.abs(position.current.x) > 1.8) {
+          position.current.z = 6.1;
+        }
+      } else if (position.current.z >= 6.15 && position.current.z <= 6.35) {
+        // 외부에서 들어올 때: 중앙 문(x: [-1.8, 1.8]) 외에는 전면 벽에 막힘
+        if (Math.abs(position.current.x) > 1.8) {
+          position.current.z = 6.35;
+        }
+      }
 
       // 캐릭터가 이동하는 방향을 바라보도록 부드럽게 회전
       const targetRotation = Math.atan2(dirX, dirZ);

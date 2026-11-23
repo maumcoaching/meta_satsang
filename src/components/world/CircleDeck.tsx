@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import * as THREE from 'three';
+import { MaitreyaStatue } from './MaitreyaStatue';
 
 interface Props {
   position?: [number, number, number];
@@ -115,7 +116,10 @@ export const CircleDeck: React.FC<Props> = ({
         </group>
       ))}
 
-      {/* 6. 연못에서 데크로 이어지는 자연스러운 돌길 */}
+      {/* 6. 서원동산 중앙 금동미륵보살반가사유상 조각상 (클릭 시 맑은 싱잉볼 명상음) */}
+      <MaitreyaStatue position={[0, deckHeight, 0]} rotation={[0, 1.85, 0]} />
+
+      {/* 7. 연못에서 데크로 이어지는 자연스러운 돌길 */}
       <group position={[-centerX, -centerY, -centerZ]}>
         {pathStones.map(([sx, sy, sz], idx) => (
           <mesh

@@ -17,9 +17,13 @@ function getGroundHeight(x: number, z: number): number {
   if (Math.abs(x) <= 0.6 && z >= 3.4 && z <= 16.0) {
     return 0.05;
   }
-  // 연못 너머 대형 원형 밝은 원목 데크 (중심: x=-24, z=12, 반경: 14m, 높이: 0.18)
+  // 연못 너머 대형 원형 밝은 원목 데크 - 서원동산 (중심: x=-24, z=12, 반경: 14m, 높이: 0.18)
   const distToCircleDeck = Math.hypot(x - (-24), z - 12);
   if (distToCircleDeck <= 14.1) {
+    // 서원동산 중앙 화강암 석조 좌대 (중심: x=-24, z=12, 폭 1.7m, 좌대 높이 1.27m)
+    if (Math.abs(x - (-24)) <= 0.85 && Math.abs(z - 12) <= 0.85) {
+      return 1.27;
+    }
     return 0.18;
   }
   // 연못에서 원형 데크로 이어지는 연결 디딤돌

@@ -13,6 +13,10 @@ export const RemotePlayer: React.FC<Props> = ({ player }) => {
   const bodyRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Group>(null);
   const rightArmRef = useRef<THREE.Group>(null);
+  const leftForearmRef = useRef<THREE.Group>(null);
+  const rightForearmRef = useRef<THREE.Group>(null);
+  const leftHandRef = useRef<THREE.Group>(null);
+  const rightHandRef = useRef<THREE.Group>(null);
   const leftLegRef = useRef<THREE.Group>(null);
   const rightLegRef = useRef<THREE.Group>(null);
 
@@ -57,65 +61,69 @@ export const RemotePlayer: React.FC<Props> = ({ player }) => {
       }
     }
 
-    // 팔 애니메이션 (걷기, 합장 손모음, 좌선)
-    if (leftArmRef.current && rightArmRef.current) {
+    // 팔 및 손바닥 관절 애니메이션 (걷기, 서있기, 합장 손바닥 마주대기, 좌선)
+    if (
+      leftArmRef.current &&
+      rightArmRef.current &&
+      leftForearmRef.current &&
+      rightForearmRef.current &&
+      leftHandRef.current &&
+      rightHandRef.current
+    ) {
+      const k = Math.min(1, delta * 14);
+      const lerpRot = (obj: THREE.Group, tx: number, ty: number, tz: number) => {
+        obj.rotation.x = THREE.MathUtils.lerp(obj.rotation.x, tx, k);
+        obj.rotation.y = THREE.MathUtils.lerp(obj.rotation.y, ty, k);
+        obj.rotation.z = THREE.MathUtils.lerp(obj.rotation.z, tz, k);
+      };
+      const lerpPos = (obj: THREE.Group, tx: number, ty: number, tz: number) => {
+        obj.position.x = THREE.MathUtils.lerp(obj.position.x, tx, k);
+        obj.position.y = THREE.MathUtils.lerp(obj.position.y, ty, k);
+        obj.position.z = THREE.MathUtils.lerp(obj.position.z, tz, k);
+      };
+
       if (player.bow) {
-        // 합장: 양팔을 앞으로 내밀고 손을 가슴 앞으로 모음
-        leftArmRef.current.position.set(
-          THREE.MathUtils.lerp(leftArmRef.current.position.x, -0.10, delta * 15),
-          THREE.MathUtils.lerp(leftArmRef.current.position.y, 0.16, delta * 15),
-          THREE.MathUtils.lerp(leftArmRef.current.position.z, 0.20, delta * 15)
-        );
-        rightArmRef.current.position.set(
-          THREE.MathUtils.lerp(rightArmRef.current.position.x, 0.10, delta * 15),
-          THREE.MathUtils.lerp(rightArmRef.current.position.y, 0.16, delta * 15),
-          THREE.MathUtils.lerp(rightArmRef.current.position.z, 0.20, delta * 15)
-        );
-        leftArmRef.current.rotation.set(1.15, 0.45, -0.65);
-        rightArmRef.current.rotation.set(1.15, -0.45, 0.65);
+        // 합장(合掌): 양팔을 가슴 앞으로 모아 팔꿈치를 굽히고 두 손바닥이 서로 마주 닿게 함
+        lerpPos(leftArmRef.current, -0.20, 0.18, 0.06);
+        lerpPos(rightArmRef.current, 0.20, 0.18, 0.06);
+        lerpRot(leftArmRef.current, -0.75, 0, 0.28);
+        lerpRot(rightArmRef.current, -0.75, 0, -0.28);
+        lerpRot(leftForearmRef.current, -1.35, 0, 0.92);
+        lerpRot(rightForearmRef.current, -1.35, 0, -0.92);
+        lerpRot(leftHandRef.current, -0.255, 0.714, -0.786);
+        lerpRot(rightHandRef.current, -0.255, -0.714, 0.786);
       } else if (player.meditate) {
-        // 좌선: 단전에 두 손을 모음
-        leftArmRef.current.position.set(
-          THREE.MathUtils.lerp(leftArmRef.current.position.x, -0.09, delta * 12),
-          THREE.MathUtils.lerp(leftArmRef.current.position.y, 0.04, delta * 12),
-          THREE.MathUtils.lerp(leftArmRef.current.position.z, 0.16, delta * 12)
-        );
-        rightArmRef.current.position.set(
-          THREE.MathUtils.lerp(rightArmRef.current.position.x, 0.09, delta * 12),
-          THREE.MathUtils.lerp(rightArmRef.current.position.y, 0.04, delta * 12),
-          THREE.MathUtils.lerp(rightArmRef.current.position.z, 0.16, delta * 12)
-        );
-        leftArmRef.current.rotation.set(0.65, 0.4, 0.2);
-        rightArmRef.current.rotation.set(0.65, -0.4, -0.2);
+        // 좌선(명상): 아랫배 단전 앞에 두 손을 가지런히 포개어 모음 (선정인)
+        lerpPos(leftArmRef.current, -0.21, 0.19, 0.03);
+        lerpPos(rightArmRef.current, 0.21, 0.19, 0.03);
+        lerpRot(leftArmRef.current, -0.35, 0, -0.05);
+        lerpRot(rightArmRef.current, -0.35, 0, 0.05);
+        lerpRot(leftForearmRef.current, -0.95, 0, 0.85);
+        lerpRot(rightForearmRef.current, -0.95, 0, -0.85);
+        lerpRot(leftHandRef.current, 0, 0, -0.4);
+        lerpRot(rightHandRef.current, 0, 0, 0.4);
       } else if (player.isMoving) {
-        // 걷기: 양팔을 옆에서 앞뒤로 시원하게 스윙
-        leftArmRef.current.position.set(
-          THREE.MathUtils.lerp(leftArmRef.current.position.x, -0.27, delta * 15),
-          THREE.MathUtils.lerp(leftArmRef.current.position.y, 0.18, delta * 15),
-          THREE.MathUtils.lerp(leftArmRef.current.position.z, 0, delta * 15)
-        );
-        rightArmRef.current.position.set(
-          THREE.MathUtils.lerp(rightArmRef.current.position.x, 0.27, delta * 15),
-          THREE.MathUtils.lerp(rightArmRef.current.position.y, 0.18, delta * 15),
-          THREE.MathUtils.lerp(rightArmRef.current.position.z, 0, delta * 15)
-        );
+        // 걷기: 몸통 바깥쪽으로 팔이 선명하게 보이도록 각도(-0.22 / +0.22)를 유지하며 앞뒤로 흔듦
         const armSwing = Math.sin(time * 12) * 0.55;
-        leftArmRef.current.rotation.set(armSwing, 0, 0.12);
-        rightArmRef.current.rotation.set(-armSwing, 0, -0.12);
+        lerpPos(leftArmRef.current, -0.22, 0.19, 0.02);
+        lerpPos(rightArmRef.current, 0.22, 0.19, 0.02);
+        lerpRot(leftArmRef.current, armSwing - 0.08, 0, -0.22);
+        lerpRot(rightArmRef.current, -armSwing - 0.08, 0, 0.22);
+        lerpRot(leftForearmRef.current, -0.28, 0, 0.06);
+        lerpRot(rightForearmRef.current, -0.28, 0, -0.06);
+        lerpRot(leftHandRef.current, 0, 0, 0);
+        lerpRot(rightHandRef.current, 0, 0, 0);
       } else {
-        // 기본 대기: 옆에 자연스럽게 내리고 호흡에 반응
-        leftArmRef.current.position.set(
-          THREE.MathUtils.lerp(leftArmRef.current.position.x, -0.27, delta * 10),
-          THREE.MathUtils.lerp(leftArmRef.current.position.y, 0.18, delta * 10),
-          THREE.MathUtils.lerp(leftArmRef.current.position.z, 0, delta * 10)
-        );
-        rightArmRef.current.position.set(
-          THREE.MathUtils.lerp(rightArmRef.current.position.x, 0.27, delta * 10),
-          THREE.MathUtils.lerp(rightArmRef.current.position.y, 0.18, delta * 10),
-          THREE.MathUtils.lerp(rightArmRef.current.position.z, 0, delta * 10)
-        );
-        leftArmRef.current.rotation.set(Math.sin(time * 2) * 0.04, 0, 0.12);
-        rightArmRef.current.rotation.set(-Math.sin(time * 2) * 0.04, 0, -0.12);
+        // 서있기(대기): 몸통에 묻히지 않고 양옆으로 팔과 손이 또렷이 보이도록 자연스럽게 내림
+        const breatheSwing = Math.sin(time * 2) * 0.03;
+        lerpPos(leftArmRef.current, -0.22, 0.19, 0.02);
+        lerpPos(rightArmRef.current, 0.22, 0.19, 0.02);
+        lerpRot(leftArmRef.current, -0.08 + breatheSwing, 0, -0.22);
+        lerpRot(rightArmRef.current, -0.08 - breatheSwing, 0, 0.22);
+        lerpRot(leftForearmRef.current, -0.18, 0, 0.05);
+        lerpRot(rightForearmRef.current, -0.18, 0, -0.05);
+        lerpRot(leftHandRef.current, 0, 0, 0);
+        lerpRot(rightHandRef.current, 0, 0, 0);
       }
     }
 
@@ -222,69 +230,103 @@ export const RemotePlayer: React.FC<Props> = ({ player }) => {
           <meshBasicMaterial color="#fda4af" transparent opacity={0.65} />
         </mesh>
 
-        {/* 5. 승복 몸통 (도포 / 가사) */}
+        {/* 5. 승복 몸통 (도포 / 가사 - 양옆 팔이 또렷하게 드러나도록 단정한 핏) */}
         <mesh position={[0, 0.02, 0]} castShadow>
-          <cylinderGeometry args={[0.18, 0.32, 0.52, 20]} />
+          <cylinderGeometry args={[0.16, 0.24, 0.50, 20]} />
           <meshStandardMaterial color="#d5d0c8" roughness={0.85} />
         </mesh>
 
         {/* 6. 붉은 가사 띠 */}
         <mesh position={[0, 0.04, 0.02]} rotation={[0, 0, -0.45]}>
-          <torusGeometry args={[0.24, 0.045, 12, 24, Math.PI * 1.3]} />
+          <torusGeometry args={[0.20, 0.04, 12, 24, Math.PI * 1.3]} />
           <meshStandardMaterial color="#b91c1c" roughness={0.8} />
         </mesh>
 
         {/* 7. 단주 / 염주 */}
-        <mesh position={[0, 0.18, 0.14]} rotation={[0.4, 0, 0]}>
-          <torusGeometry args={[0.12, 0.02, 12, 20]} />
+        <mesh position={[0, 0.18, 0.13]} rotation={[0.4, 0, 0]}>
+          <torusGeometry args={[0.11, 0.018, 12, 20]} />
           <meshStandardMaterial color="#78350f" roughness={0.6} />
         </mesh>
 
-        {/* 8. 왼팔 (가사 소매와 뚜렷한 손) */}
-        <group ref={leftArmRef} position={[-0.27, 0.18, 0]}>
-          <mesh position={[0, -0.13, 0]} castShadow>
-            <cylinderGeometry args={[0.065, 0.08, 0.26, 12]} />
-            <meshStandardMaterial color="#c5beba" roughness={0.85} />
+        {/* 8. 왼팔 (어깨 -> 상완 -> 팔꿈치 -> 전완/소매 -> 손목/손바닥) */}
+        <group ref={leftArmRef} position={[-0.22, 0.19, 0.02]} rotation={[-0.08, 0, -0.22]}>
+          <mesh position={[0, 0, 0]} castShadow>
+            <sphereGeometry args={[0.056, 12, 12]} />
+            <meshStandardMaterial color="#b8b0a8" roughness={0.85} />
           </mesh>
-          <mesh position={[0, -0.26, 0]}>
-            <cylinderGeometry args={[0.075, 0.075, 0.025, 12]} />
-            <meshStandardMaterial color="#ffffff" roughness={0.6} />
+          <mesh position={[0, -0.085, 0]} castShadow>
+            <cylinderGeometry args={[0.054, 0.062, 0.17, 12]} />
+            <meshStandardMaterial color="#b8b0a8" roughness={0.85} />
           </mesh>
-          <mesh position={[0, -0.31, 0.01]} castShadow>
-            <boxGeometry args={[0.07, 0.085, 0.04]} />
-            <meshStandardMaterial color="#fed7aa" roughness={0.7} />
-          </mesh>
-        </group>
-
-        {/* 9. 오른팔 (가사 소매와 뚜렷한 손) */}
-        <group ref={rightArmRef} position={[0.27, 0.18, 0]}>
-          <mesh position={[0, -0.13, 0]} castShadow>
-            <cylinderGeometry args={[0.065, 0.08, 0.26, 12]} />
-            <meshStandardMaterial color="#c5beba" roughness={0.85} />
-          </mesh>
-          <mesh position={[0, -0.26, 0]}>
-            <cylinderGeometry args={[0.075, 0.075, 0.025, 12]} />
-            <meshStandardMaterial color="#ffffff" roughness={0.6} />
-          </mesh>
-          <mesh position={[0, -0.31, 0.01]} castShadow>
-            <boxGeometry args={[0.07, 0.085, 0.04]} />
-            <meshStandardMaterial color="#fed7aa" roughness={0.7} />
-          </mesh>
-        </group>
-
-        {/* 10. 합장 시 가슴 앞에 마주 모아진 두 손 (Hapjang Prayer Palms) */}
-        {player.bow && (
-          <group position={[0, 0.18, 0.24]} rotation={[0.25, 0, 0]}>
-            <mesh position={[-0.016, 0, 0]} rotation={[0, 0, 0.08]}>
-              <boxGeometry args={[0.024, 0.11, 0.065]} />
-              <meshStandardMaterial color="#fed7aa" roughness={0.7} />
+          <group ref={leftForearmRef} position={[0, -0.17, 0]} rotation={[-0.18, 0, 0.05]}>
+            <mesh position={[0, 0, 0]}>
+              <sphereGeometry args={[0.056, 10, 10]} />
+              <meshStandardMaterial color="#b8b0a8" roughness={0.85} />
             </mesh>
-            <mesh position={[0.016, 0, 0]} rotation={[0, 0, -0.08]}>
-              <boxGeometry args={[0.024, 0.11, 0.065]} />
-              <meshStandardMaterial color="#fed7aa" roughness={0.7} />
+            <mesh position={[0, -0.08, 0]} castShadow>
+              <cylinderGeometry args={[0.058, 0.052, 0.16, 12]} />
+              <meshStandardMaterial color="#b8b0a8" roughness={0.85} />
             </mesh>
+            <mesh position={[0, -0.16, 0]}>
+              <cylinderGeometry args={[0.054, 0.054, 0.024, 12]} />
+              <meshStandardMaterial color="#ffffff" roughness={0.6} />
+            </mesh>
+            <group ref={leftHandRef} position={[0, -0.17, 0]}>
+              <mesh position={[0, -0.038, 0]} castShadow>
+                <boxGeometry args={[0.026, 0.062, 0.052]} />
+                <meshStandardMaterial color="#fed7aa" roughness={0.65} />
+              </mesh>
+              <mesh position={[0, -0.070, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+                <cylinderGeometry args={[0.026, 0.026, 0.026, 12]} />
+                <meshStandardMaterial color="#fed7aa" roughness={0.65} />
+              </mesh>
+              <mesh position={[0.004, -0.030, 0.028]} rotation={[0.3, 0, 0]}>
+                <sphereGeometry args={[0.013, 8, 8]} />
+                <meshStandardMaterial color="#fed7aa" roughness={0.65} />
+              </mesh>
+            </group>
           </group>
-        )}
+        </group>
+
+        {/* 9. 오른팔 (어깨 -> 상완 -> 팔꿈치 -> 전완/소매 -> 손목/손바닥) */}
+        <group ref={rightArmRef} position={[0.22, 0.19, 0.02]} rotation={[-0.08, 0, 0.22]}>
+          <mesh position={[0, 0, 0]} castShadow>
+            <sphereGeometry args={[0.056, 12, 12]} />
+            <meshStandardMaterial color="#b8b0a8" roughness={0.85} />
+          </mesh>
+          <mesh position={[0, -0.085, 0]} castShadow>
+            <cylinderGeometry args={[0.054, 0.062, 0.17, 12]} />
+            <meshStandardMaterial color="#b8b0a8" roughness={0.85} />
+          </mesh>
+          <group ref={rightForearmRef} position={[0, -0.17, 0]} rotation={[-0.18, 0, -0.05]}>
+            <mesh position={[0, 0, 0]}>
+              <sphereGeometry args={[0.056, 10, 10]} />
+              <meshStandardMaterial color="#b8b0a8" roughness={0.85} />
+            </mesh>
+            <mesh position={[0, -0.08, 0]} castShadow>
+              <cylinderGeometry args={[0.058, 0.052, 0.16, 12]} />
+              <meshStandardMaterial color="#b8b0a8" roughness={0.85} />
+            </mesh>
+            <mesh position={[0, -0.16, 0]}>
+              <cylinderGeometry args={[0.054, 0.054, 0.024, 12]} />
+              <meshStandardMaterial color="#ffffff" roughness={0.6} />
+            </mesh>
+            <group ref={rightHandRef} position={[0, -0.17, 0]}>
+              <mesh position={[0, -0.038, 0]} castShadow>
+                <boxGeometry args={[0.026, 0.062, 0.052]} />
+                <meshStandardMaterial color="#fed7aa" roughness={0.65} />
+              </mesh>
+              <mesh position={[0, -0.070, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+                <cylinderGeometry args={[0.026, 0.026, 0.026, 12]} />
+                <meshStandardMaterial color="#fed7aa" roughness={0.65} />
+              </mesh>
+              <mesh position={[-0.004, -0.030, 0.028]} rotation={[0.3, 0, 0]}>
+                <sphereGeometry args={[0.013, 8, 8]} />
+                <meshStandardMaterial color="#fed7aa" roughness={0.65} />
+              </mesh>
+            </group>
+          </group>
+        </group>
 
         {/* 10. 왼다리 & 고무신 */}
         <group ref={leftLegRef} position={[-0.11, -0.25, 0]}>

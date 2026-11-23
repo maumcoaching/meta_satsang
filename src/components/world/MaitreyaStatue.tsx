@@ -1,5 +1,4 @@
-import React, { useRef, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
+import React, { useMemo } from 'react';
 import * as THREE from 'three';
 import { sound } from '../audio/SoundEffects';
 
@@ -10,10 +9,8 @@ interface Props {
 
 export const MaitreyaStatue: React.FC<Props> = ({
   position = [0, 0, 0],
-  rotation = [0, 1.85, 0], // 서원동산 진입로(연못 디딤돌 방향)를 향해 온화하게 바라보도록 설정
+  rotation = [0, 1.85, 0], // 서원동산 진입로(연못 디딤돌 방향)를 향해 정면으로 바라보도록 설정
 }) => {
-  const haloLightRef = useRef<THREE.PointLight>(null);
-
   // 1. 실제 사진에서 정밀 추출한 고화질 금동미륵보살반가사유상 실물 텍스처
   const statueTexture = useMemo(() => {
     const loader = new THREE.TextureLoader();
@@ -66,17 +63,9 @@ export const MaitreyaStatue: React.FC<Props> = ({
     return curve.getPoints(32);
   }, []);
 
-  useFrame((state) => {
-    const time = state.clock.getElapsedTime();
-    if (haloLightRef.current) {
-      // 은은한 사유의 빛 숨결 파동
-      haloLightRef.current.intensity = 0.95 + Math.sin(time * 2.2) * 0.15;
-    }
-  });
-
   const pedestalTopY = 1.09;
   const statueHeight = 1.95;
-  const statueWidth = 1.08;
+  const statueWidth = 1.05; // 301 / 560 비율 정확히 일치 (비틀림/왜곡 없음)
 
   return (
     <group
@@ -111,40 +100,21 @@ export const MaitreyaStatue: React.FC<Props> = ({
       </mesh>
 
       {/* ========================================================
-          3. 사진 속 아름다운 실물 금동미륵보살반가사유상 (Photo Standee)
+          3. 사진 속 아름다운 실물 금동미륵보살반가사유상 (단일 정면 스탠디)
          ======================================================== */}
-      {/* 정면 고화질 반가사유상 */}
-      <mesh position={[0, pedestalTopY + statueHeight / 2 + 0.05, 0.02]} castShadow>
+      {/* 겹침 없는 단일 정면 단독 평면 - 원본 사진의 자연광과 색감을 100% 명확하게 렌더링 */}
+      <mesh position={[0, pedestalTopY + statueHeight / 2 + 0.05, 0]}>
         <planeGeometry args={[statueWidth, statueHeight]} />
-        <meshStandardMaterial
-          map={statueTexture}
-          transparent
-          alphaTest={0.05}
-          side={THREE.DoubleSide}
-          roughness={0.45}
-          metalness={0.25}
-        />
-      </mesh>
-
-      {/* 3D 깊이감을 위한 은은한 입체 교차 레이어 (30도 사선 보조 평면) */}
-      <mesh
-        position={[0, pedestalTopY + statueHeight / 2 + 0.05, 0]}
-        rotation={[0, 0.45, 0]}
-      >
-        <planeGeometry args={[statueWidth * 0.95, statueHeight]} />
-        <meshStandardMaterial
+        <meshBasicMaterial
           map={statueTexture}
           transparent
           alphaTest={0.08}
           side={THREE.DoubleSide}
-          roughness={0.5}
-          metalness={0.2}
-          opacity={0.88}
         />
       </mesh>
 
       {/* ========================================================
-          4. 사진 속 황금빛 일산(갓등) 폴대 & 캐노피 (Canopy Halo)
+          4. 사진 속 황금빛 일산(갓등) 폴대 & 캐노피 (조명 OFF)
          ======================================================== */}
       {/* 바닥 좌대 옆에서 솟아올라 머리 위로 우아하게 휜 황금 파이프 */}
       <mesh material={goldMaterial}>
@@ -154,7 +124,7 @@ export const MaitreyaStatue: React.FC<Props> = ({
       {/* 머리 위에 떠 있는 둥근 우산형 황금 갓(일산 / 캐노피) */}
       <group position={[0.0, 2.95, 0.05]}>
         {/* 상단 둥근 갓 */}
-        <mesh position={[0, 0.02, 0]} material={goldMaterial} castShadow>
+        <mesh position={[0, 0.02, 0]} material={goldMaterial}>
           <cylinderGeometry args={[0.44, 0.46, 0.04, 32]} />
         </mesh>
         {/* 하단 황금 반사판 */}
@@ -162,26 +132,18 @@ export const MaitreyaStatue: React.FC<Props> = ({
           <cylinderGeometry args={[0.42, 0.42, 0.01, 32]} />
           <meshBasicMaterial color="#fef08a" />
         </mesh>
-        {/* 반가사유상을 위에서 따뜻하게 비추는 온화한 광배 조명 */}
-        <pointLight
-          ref={haloLightRef}
-          position={[0, -0.15, 0]}
-          color="#fde047"
-          intensity={0.95}
-          distance={5.0}
-          decay={2}
-        />
+        {/* 인공 조명 OFF - 사진 본래의 맑은 톤 보존 */}
       </group>
 
       {/* ========================================================
-          5. 사진 속 측면 작은 노란색 다도/소품 선반 & 램프 (Side Stand)
+          5. 사진 속 측면 작은 노란색 다도/소품 선반 & 램프
          ======================================================== */}
       <group position={[-1.15, 0, 0.4]} rotation={[0, 0.4, 0]}>
         {/* 작은 2단 노란색 원목 선반 */}
-        <mesh position={[0, 0.32, 0]} castShadow material={goldMaterial}>
+        <mesh position={[0, 0.32, 0]} material={goldMaterial}>
           <boxGeometry args={[0.38, 0.64, 0.32]} />
         </mesh>
-        {/* 선반 위 투명 유리 랜턴 */}
+        {/* 선반 위 투명 유리 랜턴 (조명 OFF) */}
         <group position={[0, 0.72, 0]}>
           <mesh>
             <cylinderGeometry args={[0.08, 0.09, 0.16, 12]} />
@@ -189,9 +151,8 @@ export const MaitreyaStatue: React.FC<Props> = ({
           </mesh>
           <mesh position={[0, -0.04, 0]}>
             <sphereGeometry args={[0.03, 8, 8]} />
-            <meshBasicMaterial color="#f59e0b" />
+            <meshBasicMaterial color="#d97706" />
           </mesh>
-          <pointLight position={[0, 0.05, 0]} color="#f59e0b" intensity={0.4} distance={2.5} decay={2} />
         </group>
       </group>
     </group>

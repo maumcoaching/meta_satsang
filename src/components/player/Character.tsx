@@ -26,6 +26,10 @@ function getGroundHeight(x: number, z: number): number {
     }
     return 0.18;
   }
+  // 서원동산 북쪽 금강좌 기단석 (중심: x=-24, z=-1.5, 폭 12.2m, 깊이 3.8m, 높이 0.55m)
+  if (Math.abs(x - (-24)) <= 6.1 && z >= -3.4 && z <= 0.4) {
+    return 0.55;
+  }
   // 연못에서 원형 데크로 이어지는 연결 디딤돌
   if (x >= -15.0 && x <= -9.0 && z >= 4.0 && z <= 10.5) {
     return 0.05;

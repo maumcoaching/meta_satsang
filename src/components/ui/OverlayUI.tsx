@@ -99,19 +99,19 @@ export const OverlayUI: React.FC = () => {
       >
         {/* 좌측 타이틀 & 사용자 닉네임 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 24 }}>🪷</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <span style={{ fontSize: 20 }}>🪷</span>
             <h1
               style={{
-                fontSize: 20,
+                fontSize: 16,
                 fontWeight: 600,
                 color: '#ffffff',
-                letterSpacing: 2,
+                letterSpacing: 1.5,
                 textShadow: '0 2px 8px rgba(0,0,0,0.4)',
                 fontFamily: "'Noto Serif KR', serif",
               }}
             >
-              온라인 산사 (山寺)
+              온라인 삿상명상
             </h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -412,7 +412,7 @@ export const OverlayUI: React.FC = () => {
                 gap: 8,
               }}
             >
-              <span>🪷</span> 온라인 산사 안내
+              <span>🪷</span> 온라인 삿상명상 안내
             </h3>
 
             <div style={{ fontSize: 14, color: '#475569', lineHeight: 1.7, display: 'flex', flexDirection: 'column', gap: 12 }}>

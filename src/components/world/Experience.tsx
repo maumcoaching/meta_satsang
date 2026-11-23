@@ -3,6 +3,7 @@ import { Environment } from './Environment';
 import { Ground } from './Ground';
 import { TempleDeck } from './TempleDeck';
 import { Character } from '../player/Character';
+import { RemotePlayers } from '../player/RemotePlayers';
 
 export const Experience: React.FC = () => {
   return (
@@ -16,8 +17,11 @@ export const Experience: React.FC = () => {
       {/* 대청마루, 기와지붕, 기둥, 풍경, 석등, 좌복 */}
       <TempleDeck />
 
-      {/* 플레이어 아바타 및 3인칭 추종 카메라 */}
+      {/* 내 플레이어 아바타 및 3인칭 추종 카메라 */}
       <Character />
+
+      {/* 함께 접속 중인 다른 도량 방문자들 (P2P 실시간 멀티플레이어) */}
+      <RemotePlayers />
 
       {/* 
         ==================================================================

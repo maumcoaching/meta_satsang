@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Volume2, VolumeX, Bell, Music, HelpCircle, Sparkles, X } from 'lucide-react';
 import { sound } from '../audio/SoundEffects';
+import { multiplayer } from '../multiplayer/MultiplayerService';
 import confetti from 'canvas-confetti';
 
 const SERENE_NAMES = [
@@ -27,6 +28,7 @@ const ZEN_MESSAGES = [
 
 export const OverlayUI: React.FC = () => {
   const [nickname, setNickname] = useState('');
+  const [onlineCount, setOnlineCount] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showWisdom, setShowWisdom] = useState(false);
@@ -34,12 +36,18 @@ export const OverlayUI: React.FC = () => {
   const [moktakCount, setMoktakCount] = useState(0);
 
   useEffect(() => {
-    // 무작위 산사 이름 부여
-    const randomName = SERENE_NAMES[Math.floor(Math.random() * SERENE_NAMES.length)];
-    setNickname(randomName);
+    // 닉네임 연동 및 멀티플레이어 접속자 수 구독
+    setNickname(multiplayer.getNickname());
+    const unsub = multiplayer.subscribeCount((count) => {
+      setOnlineCount(count);
+    });
 
     // 은은한 자연 풍경 소리 시작
     sound.startAmbientChimes();
+
+    return () => {
+      unsub();
+    };
   }, []);
 
   const handleMoktakClick = () => {
@@ -124,7 +132,7 @@ export const OverlayUI: React.FC = () => {
                 textShadow: '0 1px 4px rgba(0,0,0,0.5)',
               }}
             >
-              도량에 머무는 이: <strong>{nickname}</strong>
+              내 이름: <strong>{nickname}</strong> &nbsp;·&nbsp; 🟢 도량에 함께 머무는 이: <strong>{onlineCount}명</strong>
             </span>
           </div>
         </div>

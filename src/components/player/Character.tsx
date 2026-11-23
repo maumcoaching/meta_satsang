@@ -1,24 +1,22 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
+import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { sharedControls } from './usePlayerControls';
 import { sound } from '../audio/SoundEffects';
+import { multiplayer } from '../multiplayer/MultiplayerService';
 
 // 지형 및 건축물 높이 감지 함수
 function getGroundHeight(x: number, z: number): number {
-  // 1. 대청마루 본체 (가로 8m x 세로 6m)
   if (Math.abs(x) <= 4.0 && Math.abs(z) <= 3.0) {
     return 0.45;
   }
-  // 2. 대청마루 석조 기단 턱
   if (Math.abs(x) <= 4.2 && Math.abs(z) <= 3.2) {
     return 0.40;
   }
-  // 3. 디딤돌 길 (살짝 솟아있는 돌)
   if (Math.abs(x) <= 0.6 && z >= 3.4 && z <= 16.0) {
     return 0.05;
   }
-  // 기본 잔디 바닥
   return 0.0;
 }
 
@@ -32,7 +30,6 @@ export const Character: React.FC = () => {
 
   const { camera, gl } = useThree();
 
-  // 기본 캐릭터 높이 기준점 (발바닥이 지면 y=0에 정확히 닿도록 설정)
   const BASE_BODY_Y = 0.66;
 
   // 물리 및 위치 상태
@@ -43,8 +40,8 @@ export const Character: React.FC = () => {
   const stepTimer = useRef(0);
 
   // 카메라 궤도(오빗) 각도
-  const camAngleX = useRef(0); // 수평 회전
-  const camAngleY = useRef(0.25); // 수직 회전
+  const camAngleX = useRef(0);
+  const camAngleY = useRef(0.25);
   const isDragging = useRef(false);
   const prevMouse = useRef({ x: 0, y: 0 });
 
@@ -95,7 +92,6 @@ export const Character: React.FC = () => {
     if (sharedControls.left) moveX -= 1;
     if (sharedControls.right) moveX += 1;
 
-    // 조이스틱 입력 결합
     if (Math.abs(sharedControls.joystickX) > 0.05 || Math.abs(sharedControls.joystickY) > 0.05) {
       moveX += sharedControls.joystickX;
       moveZ -= sharedControls.joystickY;
@@ -112,7 +108,6 @@ export const Character: React.FC = () => {
       position.current.x += Math.sin(moveAngle) * speed * delta;
       position.current.z += Math.cos(moveAngle) * speed * delta;
 
-      // 부드러운 캐릭터 회전
       const targetRotation = moveAngle;
       let diff = targetRotation - currentRotation.current;
       while (diff < -Math.PI) diff += Math.PI * 2;
@@ -120,7 +115,6 @@ export const Character: React.FC = () => {
       currentRotation.current += diff * Math.min(1, delta * 15);
       group.current.rotation.y = currentRotation.current;
 
-      // 발소리 재생 주기
       stepTimer.current += delta;
       if (stepTimer.current > 0.32) {
         sound.playStep();
@@ -140,14 +134,12 @@ export const Character: React.FC = () => {
       velocityY.current -= 16 * delta;
       position.current.y += velocityY.current * delta;
 
-      // 지면에 착지
       if (position.current.y <= currentGroundY) {
         position.current.y = currentGroundY;
         velocityY.current = 0;
         isGrounded.current = true;
       }
     } else {
-      // 대청마루나 돌길을 오르내릴 때 자연스러운 높이 적응
       position.current.y = THREE.MathUtils.lerp(position.current.y, currentGroundY, Math.min(1, delta * 15));
     }
 
@@ -158,35 +150,29 @@ export const Character: React.FC = () => {
 
     if (bodyRef.current) {
       if (sharedControls.meditate) {
-        // 좌선(명상): 바닥에 가부좌로 낮게 안착
         const sitTargetY = 0.32;
         bodyRef.current.position.y = THREE.MathUtils.lerp(bodyRef.current.position.y, sitTargetY, delta * 8);
         bodyRef.current.rotation.x = THREE.MathUtils.lerp(bodyRef.current.rotation.x, 0, delta * 8);
       } else if (sharedControls.bow) {
-        // 합장 배례(절): 상체를 앞으로 정중히 숙임
         bodyRef.current.position.y = THREE.MathUtils.lerp(bodyRef.current.position.y, BASE_BODY_Y - 0.05, delta * 8);
         bodyRef.current.rotation.x = THREE.MathUtils.lerp(bodyRef.current.rotation.x, 0.42, delta * 8);
       } else if (isMoving) {
-        // 걸을 때 리드미컬한 상하 바운스
         const walkBounce = Math.abs(Math.sin(time * 12)) * 0.04;
         bodyRef.current.position.y = THREE.MathUtils.lerp(bodyRef.current.position.y, BASE_BODY_Y + walkBounce, delta * 15);
         bodyRef.current.rotation.x = THREE.MathUtils.lerp(bodyRef.current.rotation.x, 0.06, delta * 10);
       } else {
-        // 평상시 자연스러운 호흡 숨쉬기
         const breathe = Math.sin(time * 2.5) * 0.015;
         bodyRef.current.position.y = THREE.MathUtils.lerp(bodyRef.current.position.y, BASE_BODY_Y + breathe, delta * 5);
         bodyRef.current.rotation.x = THREE.MathUtils.lerp(bodyRef.current.rotation.x, 0, delta * 8);
       }
     }
 
-    // 팔 스윙 및 합장 포즈
+    // 팔 애니메이션
     if (leftArmRef.current && rightArmRef.current) {
       if (sharedControls.meditate || sharedControls.bow) {
-        // 두 손 모아 가슴 앞에 합장 (Hapjang)
         leftArmRef.current.rotation.set(0.7, 0.4, 0.3);
         rightArmRef.current.rotation.set(0.7, -0.4, -0.3);
       } else if (isMoving) {
-        // 걸을 때 팔 흔들기
         const armSwing = Math.sin(time * 12) * 0.55;
         leftArmRef.current.rotation.set(armSwing, 0, 0.12);
         rightArmRef.current.rotation.set(-armSwing, 0, -0.12);
@@ -196,10 +182,9 @@ export const Character: React.FC = () => {
       }
     }
 
-    // 다리 걷기 애니메이션 (발로 걷는 모습이 명확히 보이도록 전후 스윙 및 리프트 적용)
+    // 다리 걷기 애니메이션
     if (leftLegRef.current && rightLegRef.current) {
       if (sharedControls.meditate) {
-        // 가부좌 접은 다리
         leftLegRef.current.position.set(-0.11, -0.22, 0);
         rightLegRef.current.position.set(0.11, -0.22, 0);
         leftLegRef.current.rotation.set(1.2, 0.5, 0.2);
@@ -216,7 +201,6 @@ export const Character: React.FC = () => {
         rightLegRef.current.position.set(0.11, -0.25 + rightLift, 0);
         rightLegRef.current.rotation.set(legSwing, 0, 0);
       } else {
-        // 정지 상태: 바닥에 단단히 서있기
         leftLegRef.current.position.set(-0.11, -0.25, 0);
         rightLegRef.current.position.set(0.11, -0.25, 0);
         leftLegRef.current.rotation.set(0, 0, 0);
@@ -232,10 +216,47 @@ export const Character: React.FC = () => {
 
     camera.position.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), delta * 6);
     camera.lookAt(position.current.x, position.current.y + 0.85, position.current.z);
+
+    // 6. 멀티플레이어 위치 및 상태 실시간 브로드캐스트
+    multiplayer.broadcastState({
+      x: position.current.x,
+      y: position.current.y,
+      z: position.current.z,
+      rot: currentRotation.current,
+      meditate: !!sharedControls.meditate,
+      bow: !!sharedControls.bow,
+      isMoving,
+    });
   });
 
   return (
     <group ref={group}>
+      {/* 머리 위 내 닉네임 명찰 */}
+      <Html position={[0, 1.48, 0]} center distanceFactor={14}>
+        <div
+          style={{
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(6px)',
+            color: '#f8fafc',
+            padding: '3px 10px',
+            borderRadius: 14,
+            fontSize: 12,
+            fontWeight: 500,
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+            border: '1px solid rgba(255, 255, 255, 0.25)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+          }}
+        >
+          <span style={{ fontSize: 10 }}>🪷</span>
+          <span>{multiplayer.getNickname()}</span>
+          <span style={{ fontSize: 10, color: '#93c5fd' }}>(나)</span>
+        </div>
+      </Html>
+
       {/* 발밑 바닥 그림자 원판 */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
         <circleGeometry args={[0.38, 24]} />
@@ -250,55 +271,63 @@ export const Character: React.FC = () => {
         </mesh>
       )}
 
-      {/* 캐릭터 본체 (BASE_BODY_Y 높이에서 머리/몸통/팔다리가 조립됨) */}
+      {/* 캐릭터 본체 (모자 없이 동글동글한 동자승 머리) */}
       <group ref={bodyRef} position={[0, BASE_BODY_Y, 0]}>
-        {/* 1. 머리 */}
+        {/* 1. 동글동글한 민머리 */}
         <mesh position={[0, 0.38, 0]} castShadow>
-          <sphereGeometry args={[0.22, 24, 24]} />
+          <sphereGeometry args={[0.24, 32, 32]} />
           <meshStandardMaterial color="#fed7aa" roughness={0.7} />
         </mesh>
 
-        {/* 2. 삿갓 (대나무/짚 원뿔형 모자) */}
-        <group position={[0, 0.52, 0]}>
-          <mesh castShadow>
-            <coneGeometry args={[0.48, 0.22, 24]} />
-            <meshStandardMaterial color="#d4a373" roughness={0.8} />
-          </mesh>
-          <mesh position={[0, -0.09, 0]}>
-            <cylinderGeometry args={[0.46, 0.46, 0.02, 24]} />
-            <meshStandardMaterial color="#8c532b" roughness={0.9} />
-          </mesh>
-        </group>
+        {/* 2. 귀여운 양쪽 귀 */}
+        <mesh position={[-0.23, 0.38, 0]} rotation={[0, 0, -0.2]}>
+          <sphereGeometry args={[0.045, 12, 12]} />
+          <meshStandardMaterial color="#fed7aa" roughness={0.7} />
+        </mesh>
+        <mesh position={[0.23, 0.38, 0]} rotation={[0, 0, 0.2]}>
+          <sphereGeometry args={[0.045, 12, 12]} />
+          <meshStandardMaterial color="#fed7aa" roughness={0.7} />
+        </mesh>
 
-        {/* 3. 눈 (잔잔하고 고요한 표정) */}
-        <mesh position={[-0.07, 0.4, 0.19]} rotation={[0, -0.15, 0]}>
+        {/* 3. 눈 (온화하고 차분한 표정) */}
+        <mesh position={[-0.07, 0.4, 0.21]} rotation={[0, -0.15, 0]}>
           <sphereGeometry args={[0.022, 12, 12]} />
           <meshBasicMaterial color="#2d3748" />
         </mesh>
-        <mesh position={[0.07, 0.4, 0.19]} rotation={[0, 0.15, 0]}>
+        <mesh position={[0.07, 0.4, 0.21]} rotation={[0, 0.15, 0]}>
           <sphereGeometry args={[0.022, 12, 12]} />
           <meshBasicMaterial color="#2d3748" />
         </mesh>
 
-        {/* 4. 승복 몸통 (도포 / 가사 - 다리가 보이도록 적절한 길이로 조정) */}
+        {/* 4. 귀여운 연분홍 볼터치 */}
+        <mesh position={[-0.13, 0.34, 0.19]}>
+          <sphereGeometry args={[0.03, 10, 10]} />
+          <meshBasicMaterial color="#fda4af" transparent opacity={0.65} />
+        </mesh>
+        <mesh position={[0.13, 0.34, 0.19]}>
+          <sphereGeometry args={[0.03, 10, 10]} />
+          <meshBasicMaterial color="#fda4af" transparent opacity={0.65} />
+        </mesh>
+
+        {/* 5. 승복 몸통 (도포 / 가사) */}
         <mesh position={[0, 0.02, 0]} castShadow>
           <cylinderGeometry args={[0.18, 0.32, 0.52, 20]} />
           <meshStandardMaterial color="#d5d0c8" roughness={0.85} />
         </mesh>
 
-        {/* 5. 붉은 가사 띠 */}
+        {/* 6. 붉은 가사 띠 */}
         <mesh position={[0, 0.04, 0.02]} rotation={[0, 0, -0.45]}>
           <torusGeometry args={[0.24, 0.045, 12, 24, Math.PI * 1.3]} />
           <meshStandardMaterial color="#b91c1c" roughness={0.8} />
         </mesh>
 
-        {/* 6. 단주 / 염주 */}
+        {/* 7. 단주 / 염주 */}
         <mesh position={[0, 0.18, 0.14]} rotation={[0.4, 0, 0]}>
           <torusGeometry args={[0.12, 0.02, 12, 20]} />
           <meshStandardMaterial color="#78350f" roughness={0.6} />
         </mesh>
 
-        {/* 7. 왼팔 */}
+        {/* 8. 왼팔 */}
         <group ref={leftArmRef} position={[-0.24, 0.18, 0]}>
           <mesh position={[0, -0.14, 0]} castShadow>
             <cylinderGeometry args={[0.055, 0.065, 0.28, 12]} />
@@ -310,7 +339,7 @@ export const Character: React.FC = () => {
           </mesh>
         </group>
 
-        {/* 8. 오른팔 */}
+        {/* 9. 오른팔 */}
         <group ref={rightArmRef} position={[0.24, 0.18, 0]}>
           <mesh position={[0, -0.14, 0]} castShadow>
             <cylinderGeometry args={[0.055, 0.065, 0.28, 12]} />
@@ -322,38 +351,32 @@ export const Character: React.FC = () => {
           </mesh>
         </group>
 
-        {/* 9. 왼다리 & 고무신 (발바닥이 바닥에 정확히 닿도록 구성) */}
+        {/* 10. 왼다리 & 고무신 */}
         <group ref={leftLegRef} position={[-0.11, -0.25, 0]}>
-          {/* 바짓단 (회색 승려복 바지) */}
           <mesh position={[0, -0.15, 0]} castShadow>
             <cylinderGeometry args={[0.065, 0.07, 0.30, 12]} />
             <meshStandardMaterial color="#a8a29e" roughness={0.9} />
           </mesh>
-          {/* 흰색 버선 & 고무신 */}
           <mesh position={[0, -0.36, 0.03]} castShadow>
             <boxGeometry args={[0.11, 0.08, 0.20]} />
             <meshStandardMaterial color="#f8fafc" roughness={0.7} />
           </mesh>
-          {/* 신발 코 앞머리 포인트 */}
           <mesh position={[0, -0.34, 0.13]}>
             <sphereGeometry args={[0.045, 10, 10]} />
             <meshStandardMaterial color="#f8fafc" roughness={0.7} />
           </mesh>
         </group>
 
-        {/* 10. 오른다리 & 고무신 */}
+        {/* 11. 오른다리 & 고무신 */}
         <group ref={rightLegRef} position={[0.11, -0.25, 0]}>
-          {/* 바짓단 */}
           <mesh position={[0, -0.15, 0]} castShadow>
             <cylinderGeometry args={[0.065, 0.07, 0.30, 12]} />
             <meshStandardMaterial color="#a8a29e" roughness={0.9} />
           </mesh>
-          {/* 흰색 버선 & 고무신 */}
           <mesh position={[0, -0.36, 0.03]} castShadow>
             <boxGeometry args={[0.11, 0.08, 0.20]} />
             <meshStandardMaterial color="#f8fafc" roughness={0.7} />
           </mesh>
-          {/* 신발 코 앞머리 포인트 */}
           <mesh position={[0, -0.34, 0.13]}>
             <sphereGeometry args={[0.045, 10, 10]} />
             <meshStandardMaterial color="#f8fafc" roughness={0.7} />

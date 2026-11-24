@@ -29,8 +29,8 @@ export const TempleDeck: React.FC = () => {
   const smokeWrapperRef = useRef<THREE.Group>(null);
 
   // 헌향 버튼 클릭 핸들러
-  const handleOfferIncense = (e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
+  const handleOfferIncense = (e?: { stopPropagation?: () => void }) => {
+    if (e?.stopPropagation) e.stopPropagation();
     sound.playSingingBowl();
 
     // 캐릭터가 불단을 향해 정성스럽게 합장 인사하도록 유도 (2.6초간)

@@ -5,9 +5,21 @@ import * as THREE from 'three';
 import { sharedControls } from './usePlayerControls';
 import { sound } from '../audio/SoundEffects';
 import { multiplayer } from '../multiplayer/MultiplayerService';
+import {
+  BRIDGE_Z,
+  BRIDGE_HALF_WIDTH,
+  STREAM_BLOCK_HALF_WIDTH,
+  getStreamCenterX,
+  getBridgeHeight,
+} from '../world/MountainStream';
 
 // 지형 및 건축물 높이 감지 함수
 function getGroundHeight(x: number, z: number): number {
+  // 0. 개천 위 작은 아치형 나무 다리 (x ≈ 9.35 ~ 13.05, z ≈ 5.35 ~ 6.65)
+  const bridgeH = getBridgeHeight(x, z);
+  if (bridgeH > 0) {
+    return bridgeH;
+  }
   // 1. 대형 확장 법당 내부 및 마루 (폭: x in [-6.8, 6.8], 깊이: z in [-6.8, 6.3], 마루 높이: 0.45m)
   if (Math.abs(x) <= 6.8 && z >= -6.8 && z <= 6.3) {
     // 중앙 불단 (수미단: 폭 5.5m, 깊이 1.5m, 높이 1.32m)
@@ -173,6 +185,9 @@ export const Character: React.FC = () => {
       const dirX = worldMoveX / norm;
       const dirZ = worldMoveZ / norm;
 
+      const prevX = position.current.x;
+      const prevZ = position.current.z;
+
       position.current.x += dirX * Math.min(inputLength, 1) * speed * delta;
       position.current.z += dirZ * Math.min(inputLength, 1) * speed * delta;
 
@@ -189,6 +204,39 @@ export const Character: React.FC = () => {
         if (Math.abs(position.current.x) > 1.8) {
           position.current.z = 6.35;
         }
+      }
+
+      // 개울(개천) 물 진입 차단 및 작은 나무 다리 통행 처리
+      const prevStreamX = getStreamCenterX(prevZ);
+      const currStreamX = getStreamCenterX(position.current.z);
+      const bridgePassHalfW = BRIDGE_HALF_WIDTH - 0.1; // 난간 안쪽 통행 폭 (0.55m)
+      const wasInStreamX = Math.abs(prevX - prevStreamX) < STREAM_BLOCK_HALF_WIDTH;
+      const wasOnBridge = Math.abs(prevZ - BRIDGE_Z) <= bridgePassHalfW && wasInStreamX;
+
+      if (wasOnBridge) {
+        // 다리 위를 건너는 중일 때는 양옆 나무 난간 밖(개울물)으로 떨어지지 않도록 Z 범위 고정
+        position.current.z = Math.max(
+          BRIDGE_Z - bridgePassHalfW,
+          Math.min(BRIDGE_Z + bridgePassHalfW, position.current.z)
+        );
+      } else {
+        const isAtBridgeEntrance = Math.abs(position.current.z - BRIDGE_Z) <= bridgePassHalfW;
+        if (!isAtBridgeEntrance && Math.abs(position.current.x - currStreamX) < STREAM_BLOCK_HALF_WIDTH) {
+          // 다리가 아닌 곳에서는 개울물을 건너지 못하도록 강기슭에서 차단
+          if (prevX <= prevStreamX) {
+            position.current.x = currStreamX - STREAM_BLOCK_HALF_WIDTH;
+          } else {
+            position.current.x = currStreamX + STREAM_BLOCK_HALF_WIDTH;
+          }
+        }
+      }
+
+      // 연못(중심: x=-7, z=4, 반경 3.45m) 물속 진입 차단
+      const distToPond = Math.hypot(position.current.x - (-7), position.current.z - 4);
+      if (distToPond < 3.45) {
+        const angle = Math.atan2(position.current.z - 4, position.current.x - (-7));
+        position.current.x = -7 + Math.cos(angle) * 3.45;
+        position.current.z = 4 + Math.sin(angle) * 3.45;
       }
 
       // 캐릭터가 이동하는 방향을 바라보도록 부드럽게 회전

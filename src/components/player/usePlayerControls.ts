@@ -8,6 +8,7 @@ export interface PlayerControlsState {
   jump: boolean;
   meditate: boolean;
   bow: boolean;
+  prostrate: boolean;
   joystickX: number;
   joystickY: number;
   playerX: number;
@@ -23,6 +24,7 @@ export const sharedControls: PlayerControlsState = {
   jump: false,
   meditate: false,
   bow: false,
+  prostrate: false,
   joystickX: 0,
   joystickY: 0,
   playerX: 0,

@@ -7,6 +7,7 @@ export interface PlayerData {
   rot: number;
   meditate: boolean;
   bow: boolean;
+  prostrate?: boolean;
   isMoving: boolean;
   nickname: string;
 }
@@ -93,6 +94,7 @@ class MultiplayerManager {
           existing.targetRot = data.rot;
           existing.meditate = data.meditate;
           existing.bow = data.bow;
+          existing.prostrate = !!data.prostrate;
           existing.isMoving = data.isMoving;
           existing.nickname = data.nickname || existing.nickname;
           existing.lastSeen = now;

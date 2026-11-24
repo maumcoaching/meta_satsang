@@ -25,6 +25,7 @@ export const RemotePlayer: React.FC<Props> = ({ player }) => {
   const BASE_BODY_Y = 0.66;
   const currentPos = useRef(new THREE.Vector3(player.x, player.y, player.z));
   const currentRot = useRef(player.rot);
+  const prostrateTimerRef = useRef(0);
 
   useFrame((state, delta) => {
     if (!group.current) return;
@@ -42,28 +43,73 @@ export const RemotePlayer: React.FC<Props> = ({ player }) => {
     group.current.position.copy(currentPos.current);
     group.current.rotation.y = currentRot.current;
 
-    // 2. 애니메이션 (좌선 / 합장 / 걷기 / 대기)
+    let prostratePhase = -1;
+    if (player.prostrate) {
+      prostrateTimerRef.current = (prostrateTimerRef.current + delta) % 3.65;
+      prostratePhase = prostrateTimerRef.current;
+    } else {
+      prostrateTimerRef.current = 0;
+    }
+
+    // 2. 애니메이션 (오체투지 큰절 / 좌선 / 합장 / 걷기 / 대기)
     const time = state.clock.getElapsedTime();
 
     if (bodyRef.current) {
-      if (player.meditate) {
+      if (prostratePhase >= 0) {
+        let targetY = BASE_BODY_Y;
+        let targetZ = 0;
+        let targetRotX = 0.18;
+
+        if (prostratePhase < 0.55) {
+          targetY = BASE_BODY_Y - 0.02;
+          targetZ = 0;
+          targetRotX = 0.22;
+        } else if (prostratePhase < 1.35) {
+          const p = THREE.MathUtils.smoothstep((prostratePhase - 0.55) / 0.8, 0, 1);
+          targetY = THREE.MathUtils.lerp(BASE_BODY_Y - 0.02, 0.24, p);
+          targetZ = THREE.MathUtils.lerp(0, -0.10, p);
+          targetRotX = THREE.MathUtils.lerp(0.22, 1.35, p);
+        } else if (prostratePhase < 2.35) {
+          targetY = 0.23;
+          targetZ = -0.10;
+          targetRotX = 1.38;
+        } else if (prostratePhase < 3.15) {
+          const p = THREE.MathUtils.smoothstep((prostratePhase - 2.35) / 0.8, 0, 1);
+          targetY = THREE.MathUtils.lerp(0.23, BASE_BODY_Y - 0.02, p);
+          targetZ = THREE.MathUtils.lerp(-0.10, 0, p);
+          targetRotX = THREE.MathUtils.lerp(1.38, 0.22, p);
+        } else {
+          const p = THREE.MathUtils.smoothstep((prostratePhase - 3.15) / 0.5, 0, 1);
+          targetY = THREE.MathUtils.lerp(BASE_BODY_Y - 0.02, BASE_BODY_Y, p);
+          targetZ = 0;
+          targetRotX = THREE.MathUtils.lerp(0.22, 0, p);
+        }
+
+        bodyRef.current.position.y = THREE.MathUtils.lerp(bodyRef.current.position.y, targetY, delta * 14);
+        bodyRef.current.position.z = THREE.MathUtils.lerp(bodyRef.current.position.z, targetZ, delta * 14);
+        bodyRef.current.rotation.x = THREE.MathUtils.lerp(bodyRef.current.rotation.x, targetRotX, delta * 14);
+      } else if (player.meditate) {
         bodyRef.current.position.y = THREE.MathUtils.lerp(bodyRef.current.position.y, 0.32, delta * 8);
+        bodyRef.current.position.z = THREE.MathUtils.lerp(bodyRef.current.position.z, 0, delta * 8);
         bodyRef.current.rotation.x = THREE.MathUtils.lerp(bodyRef.current.rotation.x, 0, delta * 8);
       } else if (player.bow) {
         bodyRef.current.position.y = THREE.MathUtils.lerp(bodyRef.current.position.y, BASE_BODY_Y - 0.05, delta * 8);
+        bodyRef.current.position.z = THREE.MathUtils.lerp(bodyRef.current.position.z, 0, delta * 8);
         bodyRef.current.rotation.x = THREE.MathUtils.lerp(bodyRef.current.rotation.x, 0.42, delta * 8);
       } else if (player.isMoving) {
         const walkBounce = Math.abs(Math.sin(time * 12)) * 0.04;
         bodyRef.current.position.y = THREE.MathUtils.lerp(bodyRef.current.position.y, BASE_BODY_Y + walkBounce, delta * 15);
+        bodyRef.current.position.z = THREE.MathUtils.lerp(bodyRef.current.position.z, 0, delta * 10);
         bodyRef.current.rotation.x = THREE.MathUtils.lerp(bodyRef.current.rotation.x, 0.06, delta * 10);
       } else {
         const breathe = Math.sin(time * 2.5) * 0.015;
         bodyRef.current.position.y = THREE.MathUtils.lerp(bodyRef.current.position.y, BASE_BODY_Y + breathe, delta * 5);
+        bodyRef.current.position.z = THREE.MathUtils.lerp(bodyRef.current.position.z, 0, delta * 10);
         bodyRef.current.rotation.x = THREE.MathUtils.lerp(bodyRef.current.rotation.x, 0, delta * 8);
       }
     }
 
-    // 팔 및 손바닥 관절 애니메이션 (걷기, 서있기, 합장 손바닥 마주대기, 좌선)
+    // 팔 및 손바닥 관절 애니메이션 (걷기, 서있기, 합장, 오체투지 큰절/접족례, 좌선)
     if (
       leftArmRef.current &&
       rightArmRef.current &&
@@ -84,7 +130,36 @@ export const RemotePlayer: React.FC<Props> = ({ player }) => {
         obj.position.z = THREE.MathUtils.lerp(obj.position.z, tz, k);
       };
 
-      if (player.bow) {
+      if (prostratePhase >= 0) {
+        if (prostratePhase < 0.75 || prostratePhase > 2.95) {
+          lerpPos(leftArmRef.current, -0.20, 0.18, 0.06);
+          lerpPos(rightArmRef.current, 0.20, 0.18, 0.06);
+          lerpRot(leftArmRef.current, -0.75, 0, 0.28);
+          lerpRot(rightArmRef.current, -0.75, 0, -0.28);
+          lerpRot(leftForearmRef.current, -1.35, 0, 0.92);
+          lerpRot(rightForearmRef.current, -1.35, 0, -0.92);
+          lerpRot(leftHandRef.current, -0.255, 0.714, -0.786);
+          lerpRot(rightHandRef.current, -0.255, -0.714, 0.786);
+        } else if (prostratePhase >= 1.55 && prostratePhase <= 2.25) {
+          lerpPos(leftArmRef.current, -0.20, 0.18, 0.06);
+          lerpPos(rightArmRef.current, 0.20, 0.18, 0.06);
+          lerpRot(leftArmRef.current, -1.45, 0, -0.08);
+          lerpRot(rightArmRef.current, -1.45, 0, 0.08);
+          lerpRot(leftForearmRef.current, -0.85, 0, 0.12);
+          lerpRot(rightForearmRef.current, -0.85, 0, -0.12);
+          lerpRot(leftHandRef.current, -0.35, 0, -1.35);
+          lerpRot(rightHandRef.current, -0.35, 0, 1.35);
+        } else {
+          lerpPos(leftArmRef.current, -0.20, 0.18, 0.06);
+          lerpPos(rightArmRef.current, 0.20, 0.18, 0.06);
+          lerpRot(leftArmRef.current, -1.38, 0, -0.05);
+          lerpRot(rightArmRef.current, -1.38, 0, 0.05);
+          lerpRot(leftForearmRef.current, -0.45, 0, 0.18);
+          lerpRot(rightForearmRef.current, -0.45, 0, -0.18);
+          lerpRot(leftHandRef.current, 0.2, 0, 0);
+          lerpRot(rightHandRef.current, 0.2, 0, 0);
+        }
+      } else if (player.bow) {
         // 합장(合掌): 양팔을 가슴 앞으로 모아 팔꿈치를 굽히고 두 손바닥이 서로 마주 닿게 함
         lerpPos(leftArmRef.current, -0.20, 0.18, 0.06);
         lerpPos(rightArmRef.current, 0.20, 0.18, 0.06);
@@ -131,7 +206,26 @@ export const RemotePlayer: React.FC<Props> = ({ player }) => {
 
     // 다리 애니메이션
     if (leftLegRef.current && rightLegRef.current) {
-      if (player.meditate) {
+      if (prostratePhase >= 0) {
+        let legBend = 0;
+        let legY = -0.25;
+        if (prostratePhase >= 0.55 && prostratePhase < 1.35) {
+          const p = THREE.MathUtils.smoothstep((prostratePhase - 0.55) / 0.8, 0, 1);
+          legBend = THREE.MathUtils.lerp(0, 1.48, p);
+          legY = THREE.MathUtils.lerp(-0.25, -0.16, p);
+        } else if (prostratePhase >= 1.35 && prostratePhase < 2.35) {
+          legBend = 1.48;
+          legY = -0.16;
+        } else if (prostratePhase >= 2.35 && prostratePhase < 3.15) {
+          const p = THREE.MathUtils.smoothstep((prostratePhase - 2.35) / 0.8, 0, 1);
+          legBend = THREE.MathUtils.lerp(1.48, 0, p);
+          legY = THREE.MathUtils.lerp(-0.16, -0.25, p);
+        }
+        leftLegRef.current.position.set(-0.11, legY, 0);
+        rightLegRef.current.position.set(0.11, legY, 0);
+        leftLegRef.current.rotation.set(legBend, 0, 0);
+        rightLegRef.current.rotation.set(legBend, 0, 0);
+      } else if (player.meditate) {
         leftLegRef.current.position.set(-0.11, -0.22, 0);
         rightLegRef.current.position.set(0.11, -0.22, 0);
         leftLegRef.current.rotation.set(1.2, 0.5, 0.2);
@@ -155,11 +249,11 @@ export const RemotePlayer: React.FC<Props> = ({ player }) => {
       }
     }
 
-    // 귀여운 눈 깜빡임 및 합장/좌선 시 평온한 반달 눈웃음 표정 전환
+    // 귀여운 눈 깜빡임 및 합장/좌선/절하기 시 평온한 반달 눈웃음 표정 전환
     if (openEyesRef.current && closedEyesRef.current) {
       const blinkCycle = (time + 1.3) % 3.8;
       const isBlinking = blinkCycle > 3.64;
-      const showClosedSmileEyes = !!player.meditate || !!player.bow || isBlinking;
+      const showClosedSmileEyes = !!player.meditate || !!player.bow || !!player.prostrate || isBlinking;
       openEyesRef.current.visible = !showClosedSmileEyes;
       closedEyesRef.current.visible = showClosedSmileEyes;
     }

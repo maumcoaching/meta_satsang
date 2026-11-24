@@ -44,6 +44,10 @@ function getGroundHeight(x: number, z: number): number {
   return 0.0;
 }
 
+const CUSHION_COLS = [-4.6, -3.1, -1.6, 1.6, 3.1, 4.6];
+const CUSHION_ROWS = [3.8, 2.0, 0.2, -1.6, -3.4];
+const PROSTRATE_DURATION = 3.65; // 1배(오체투지 큰절) 전체 소요 시간(초)
+
 export const Character: React.FC = () => {
   const group = useRef<THREE.Group>(null);
   const bodyRef = useRef<THREE.Group>(null);
@@ -61,6 +65,27 @@ export const Character: React.FC = () => {
   const { camera, gl } = useThree();
 
   const BASE_BODY_Y = 0.66;
+
+  // 좌복 위 절하기(오체투지 큰절) 상태 관리
+  const [isOnCushion, setIsOnCushion] = useState(false);
+  const [isProstrating, setIsProstrating] = useState(false);
+  const [bowCount, setBowCount] = useState(0);
+
+  const onCushionRef = useRef(false);
+  const activeCushionPosRef = useRef<{ x: number; z: number } | null>(null);
+  const prostrateTimerRef = useRef(0);
+
+  // 절하기 버튼 클릭 시 1배(오체투지 큰절) 시작
+  const handleStartProstrate = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    sound.playMoktak();
+
+    sharedControls.meditate = false;
+    sharedControls.bow = false;
+    sharedControls.prostrate = true;
+    prostrateTimerRef.current = 0;
+    setIsProstrating(true);
+  };
 
   // 물리 및 위치 상태
   const position = useRef(new THREE.Vector3(0, 0.45, 4.5)); // 법당 안쪽 입구 (좌복 30장과 불단을 마주보고 시작)
@@ -129,7 +154,12 @@ export const Character: React.FC = () => {
     }
 
     const inputLength = Math.hypot(moveX, moveZ);
-    const isMoving = inputLength > 0.1 && !sharedControls.meditate && !sharedControls.bow;
+    // 이동 입력이 들어오면 절하기 동작을 자연스럽게 중단하고 걸어갈 수 있도록 함
+    if (inputLength > 0.15 && sharedControls.prostrate) {
+      sharedControls.prostrate = false;
+      setIsProstrating(false);
+    }
+    const isMoving = inputLength > 0.1 && !sharedControls.meditate && !sharedControls.bow && !sharedControls.prostrate;
 
     // 2. 이동 및 카메라 시점 기준 직관적인 방향 변환
     if (isMoving) {
@@ -202,29 +232,120 @@ export const Character: React.FC = () => {
     sharedControls.playerX = position.current.x;
     sharedControls.playerZ = position.current.z;
 
-    // 4. 애니메이션 (발걸음, 좌선, 합장, 호흡)
+    // 3-B. 법당 내 30장 좌복 위에 올라섰는지 감지
+    let foundCushion: { x: number; z: number } | null = null;
+    if (Math.abs(position.current.x) <= 5.5 && position.current.z >= -4.2 && position.current.z <= 4.6) {
+      for (const cx of CUSHION_COLS) {
+        for (const cz of CUSHION_ROWS) {
+          if (Math.hypot(position.current.x - cx, position.current.z - cz) <= 0.56) {
+            foundCushion = { x: cx, z: cz };
+            break;
+          }
+        }
+        if (foundCushion) break;
+      }
+    }
+    const nowOnCushion = foundCushion !== null;
+    activeCushionPosRef.current = foundCushion;
+    if (nowOnCushion !== onCushionRef.current) {
+      onCushionRef.current = nowOnCushion;
+      setIsOnCushion(nowOnCushion);
+    }
+
+    // 절하기 진행 중일 때: 해당 좌복 중앙에 위치를 정렬하고 북쪽 불단(Math.PI)을 바라보도록 회전
+    let prostratePhase = -1; // -1이면 절하기 중이 아님
+    if (sharedControls.prostrate) {
+      prostrateTimerRef.current += delta;
+      prostratePhase = prostrateTimerRef.current;
+
+      if (activeCushionPosRef.current) {
+        position.current.x = THREE.MathUtils.lerp(position.current.x, activeCushionPosRef.current.x, delta * 8);
+        position.current.z = THREE.MathUtils.lerp(position.current.z, activeCushionPosRef.current.z, delta * 8);
+        group.current.position.x = position.current.x;
+        group.current.position.z = position.current.z;
+      }
+
+      // 불단 방향(-Z, 회전값 Math.PI)을 바라보도록 부드럽게 정렬
+      let rotDiff = Math.PI - currentRotation.current;
+      while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+      while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+      currentRotation.current += rotDiff * Math.min(1, delta * 10);
+      group.current.rotation.y = currentRotation.current;
+
+      if (prostrateTimerRef.current >= PROSTRATE_DURATION) {
+        sharedControls.prostrate = false;
+        setIsProstrating(false);
+        setBowCount((prev) => prev + 1);
+        prostratePhase = -1;
+      }
+    }
+
+    // 4. 애니메이션 (발걸음, 좌선, 합장, 오체투지 큰절, 호흡)
     const time = state.clock.getElapsedTime();
 
     if (bodyRef.current) {
-      if (sharedControls.meditate) {
+      if (prostratePhase >= 0) {
+        // 오체투지 큰절 5단계 상체 움직임:
+        // 0.0~0.55s: 서서 합장 반배
+        // 0.55~1.35s: 무릎 꿇고 상체를 깊이 숙여 엎드림
+        // 1.35~2.35s: 이마를 바닥 가까이 대고 오체투지 유지
+        // 2.35~3.15s: 무릎을 펴며 다시 일어섬
+        // 3.15~3.65s: 마무리 합장 반배 후 정자세
+        let targetY = BASE_BODY_Y;
+        let targetZ = 0;
+        let targetRotX = 0.18;
+
+        if (prostratePhase < 0.55) {
+          targetY = BASE_BODY_Y - 0.02;
+          targetZ = 0;
+          targetRotX = 0.22;
+        } else if (prostratePhase < 1.35) {
+          const p = THREE.MathUtils.smoothstep((prostratePhase - 0.55) / 0.8, 0, 1);
+          targetY = THREE.MathUtils.lerp(BASE_BODY_Y - 0.02, 0.24, p);
+          targetZ = THREE.MathUtils.lerp(0, -0.10, p);
+          targetRotX = THREE.MathUtils.lerp(0.22, 1.35, p);
+        } else if (prostratePhase < 2.35) {
+          targetY = 0.23;
+          targetZ = -0.10;
+          targetRotX = 1.38;
+        } else if (prostratePhase < 3.15) {
+          const p = THREE.MathUtils.smoothstep((prostratePhase - 2.35) / 0.8, 0, 1);
+          targetY = THREE.MathUtils.lerp(0.23, BASE_BODY_Y - 0.02, p);
+          targetZ = THREE.MathUtils.lerp(-0.10, 0, p);
+          targetRotX = THREE.MathUtils.lerp(1.38, 0.22, p);
+        } else {
+          const p = THREE.MathUtils.smoothstep((prostratePhase - 3.15) / 0.5, 0, 1);
+          targetY = THREE.MathUtils.lerp(BASE_BODY_Y - 0.02, BASE_BODY_Y, p);
+          targetZ = 0;
+          targetRotX = THREE.MathUtils.lerp(0.22, 0, p);
+        }
+
+        bodyRef.current.position.y = THREE.MathUtils.lerp(bodyRef.current.position.y, targetY, delta * 14);
+        bodyRef.current.position.z = THREE.MathUtils.lerp(bodyRef.current.position.z, targetZ, delta * 14);
+        bodyRef.current.rotation.x = THREE.MathUtils.lerp(bodyRef.current.rotation.x, targetRotX, delta * 14);
+      } else if (sharedControls.meditate) {
         const sitTargetY = 0.32;
         bodyRef.current.position.y = THREE.MathUtils.lerp(bodyRef.current.position.y, sitTargetY, delta * 8);
+        bodyRef.current.position.z = THREE.MathUtils.lerp(bodyRef.current.position.z, 0, delta * 8);
         bodyRef.current.rotation.x = THREE.MathUtils.lerp(bodyRef.current.rotation.x, 0, delta * 8);
       } else if (sharedControls.bow) {
         bodyRef.current.position.y = THREE.MathUtils.lerp(bodyRef.current.position.y, BASE_BODY_Y - 0.05, delta * 8);
+        bodyRef.current.position.z = THREE.MathUtils.lerp(bodyRef.current.position.z, 0, delta * 8);
         bodyRef.current.rotation.x = THREE.MathUtils.lerp(bodyRef.current.rotation.x, 0.42, delta * 8);
       } else if (isMoving) {
         const walkBounce = Math.abs(Math.sin(time * 12)) * 0.04;
         bodyRef.current.position.y = THREE.MathUtils.lerp(bodyRef.current.position.y, BASE_BODY_Y + walkBounce, delta * 15);
+        bodyRef.current.position.z = THREE.MathUtils.lerp(bodyRef.current.position.z, 0, delta * 10);
         bodyRef.current.rotation.x = THREE.MathUtils.lerp(bodyRef.current.rotation.x, 0.06, delta * 10);
       } else {
         const breathe = Math.sin(time * 2.5) * 0.015;
         bodyRef.current.position.y = THREE.MathUtils.lerp(bodyRef.current.position.y, BASE_BODY_Y + breathe, delta * 5);
+        bodyRef.current.position.z = THREE.MathUtils.lerp(bodyRef.current.position.z, 0, delta * 10);
         bodyRef.current.rotation.x = THREE.MathUtils.lerp(bodyRef.current.rotation.x, 0, delta * 8);
       }
     }
 
-    // 팔 및 손바닥 관절 애니메이션 (걷기, 서있기, 합장 손바닥 마주대기, 좌선)
+    // 팔 및 손바닥 관절 애니메이션 (걷기, 서있기, 합장, 오체투지 큰절/접족례, 좌선)
     if (
       leftArmRef.current &&
       rightArmRef.current &&
@@ -245,7 +366,39 @@ export const Character: React.FC = () => {
         obj.position.z = THREE.MathUtils.lerp(obj.position.z, tz, k);
       };
 
-      if (sharedControls.bow) {
+      if (prostratePhase >= 0) {
+        if (prostratePhase < 0.75 || prostratePhase > 2.95) {
+          // 서서 시작/마무리할 때: 가슴 앞 합장
+          lerpPos(leftArmRef.current, -0.20, 0.18, 0.06);
+          lerpPos(rightArmRef.current, 0.20, 0.18, 0.06);
+          lerpRot(leftArmRef.current, -0.75, 0, 0.28);
+          lerpRot(rightArmRef.current, -0.75, 0, -0.28);
+          lerpRot(leftForearmRef.current, -1.35, 0, 0.92);
+          lerpRot(rightForearmRef.current, -1.35, 0, -0.92);
+          lerpRot(leftHandRef.current, -0.255, 0.714, -0.786);
+          lerpRot(rightHandRef.current, -0.255, -0.714, 0.786);
+        } else if (prostratePhase >= 1.55 && prostratePhase <= 2.25) {
+          // 엎드린 상태에서 두 손바닥을 하늘로 향하여 받드는 접족례(接足禮)
+          lerpPos(leftArmRef.current, -0.20, 0.18, 0.06);
+          lerpPos(rightArmRef.current, 0.20, 0.18, 0.06);
+          lerpRot(leftArmRef.current, -1.45, 0, -0.08);
+          lerpRot(rightArmRef.current, -1.45, 0, 0.08);
+          lerpRot(leftForearmRef.current, -0.85, 0, 0.12);
+          lerpRot(rightForearmRef.current, -0.85, 0, -0.12);
+          lerpRot(leftHandRef.current, -0.35, 0, -1.35);
+          lerpRot(rightHandRef.current, -0.35, 0, 1.35);
+        } else {
+          // 바닥을 짚고 엎드리거나 일어서는 중
+          lerpPos(leftArmRef.current, -0.20, 0.18, 0.06);
+          lerpPos(rightArmRef.current, 0.20, 0.18, 0.06);
+          lerpRot(leftArmRef.current, -1.38, 0, -0.05);
+          lerpRot(rightArmRef.current, -1.38, 0, 0.05);
+          lerpRot(leftForearmRef.current, -0.45, 0, 0.18);
+          lerpRot(rightForearmRef.current, -0.45, 0, -0.18);
+          lerpRot(leftHandRef.current, 0.2, 0, 0);
+          lerpRot(rightHandRef.current, 0.2, 0, 0);
+        }
+      } else if (sharedControls.bow) {
         // 합장(合掌): 양팔을 가슴 앞으로 모아 팔꿈치를 굽히고 두 손바닥이 서로 마주 닿게 함
         lerpPos(leftArmRef.current, -0.20, 0.18, 0.06);
         lerpPos(rightArmRef.current, 0.20, 0.18, 0.06);
@@ -290,9 +443,29 @@ export const Character: React.FC = () => {
       }
     }
 
-    // 다리 걷기 애니메이션
+    // 다리 걷기 및 무릎 꿇기 애니메이션
     if (leftLegRef.current && rightLegRef.current) {
-      if (sharedControls.meditate) {
+      if (prostratePhase >= 0) {
+        // 무릎을 꿇고 다리를 뒤로 접는 절 동작
+        let legBend = 0;
+        let legY = -0.25;
+        if (prostratePhase >= 0.55 && prostratePhase < 1.35) {
+          const p = THREE.MathUtils.smoothstep((prostratePhase - 0.55) / 0.8, 0, 1);
+          legBend = THREE.MathUtils.lerp(0, 1.48, p);
+          legY = THREE.MathUtils.lerp(-0.25, -0.16, p);
+        } else if (prostratePhase >= 1.35 && prostratePhase < 2.35) {
+          legBend = 1.48;
+          legY = -0.16;
+        } else if (prostratePhase >= 2.35 && prostratePhase < 3.15) {
+          const p = THREE.MathUtils.smoothstep((prostratePhase - 2.35) / 0.8, 0, 1);
+          legBend = THREE.MathUtils.lerp(1.48, 0, p);
+          legY = THREE.MathUtils.lerp(-0.16, -0.25, p);
+        }
+        leftLegRef.current.position.set(-0.11, legY, 0);
+        rightLegRef.current.position.set(0.11, legY, 0);
+        leftLegRef.current.rotation.set(legBend, 0, 0);
+        rightLegRef.current.rotation.set(legBend, 0, 0);
+      } else if (sharedControls.meditate) {
         leftLegRef.current.position.set(-0.11, -0.22, 0);
         rightLegRef.current.position.set(0.11, -0.22, 0);
         leftLegRef.current.rotation.set(1.2, 0.5, 0.2);
@@ -316,11 +489,12 @@ export const Character: React.FC = () => {
       }
     }
 
-    // 귀여운 눈 깜빡임 및 합장/좌선 시 평온한 반달 눈웃음 표정 전환
+    // 귀여운 눈 깜빡임 및 합장/좌선/절하기 시 평온한 반달 눈웃음 표정 전환
     if (openEyesRef.current && closedEyesRef.current) {
       const blinkCycle = time % 3.8;
       const isBlinking = blinkCycle > 3.64;
-      const showClosedSmileEyes = !!sharedControls.meditate || !!sharedControls.bow || isBlinking;
+      const showClosedSmileEyes =
+        !!sharedControls.meditate || !!sharedControls.bow || !!sharedControls.prostrate || isBlinking;
       openEyesRef.current.visible = !showClosedSmileEyes;
       closedEyesRef.current.visible = showClosedSmileEyes;
     }
@@ -342,12 +516,53 @@ export const Character: React.FC = () => {
       rot: currentRotation.current,
       meditate: !!sharedControls.meditate,
       bow: !!sharedControls.bow,
+      prostrate: !!sharedControls.prostrate,
       isMoving,
     });
   });
 
   return (
     <group ref={group}>
+      {/* 좌복 위에 올라섰을 때 나타나는 '절하기' 버튼 */}
+      {isOnCushion && (
+        <Html position={[0, 1.52, 0]} center>
+          <div style={{ pointerEvents: 'auto' }}>
+            <button
+              onClick={handleStartProstrate}
+              disabled={isProstrating}
+              style={{
+                padding: '7px 18px',
+                borderRadius: 22,
+                background: isProstrating
+                  ? 'rgba(28, 25, 23, 0.82)'
+                  : 'linear-gradient(135deg, #991b1b 0%, #450a0a 100%)',
+                color: '#fef3c7',
+                border: '1.5px solid #f59e0b',
+                boxShadow: '0 4px 14px rgba(0,0,0,0.38), 0 0 10px rgba(245, 158, 11, 0.3)',
+                fontSize: 13,
+                fontWeight: 700,
+                fontFamily: "'Noto Serif KR', serif",
+                letterSpacing: 1,
+                cursor: isProstrating ? 'default' : 'pointer',
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <span>🙇</span>
+              <span>
+                {isProstrating
+                  ? '배례(절) 올리는 중...'
+                  : bowCount > 0
+                    ? `절하기 (${bowCount}배)`
+                    : '절하기'}
+              </span>
+            </button>
+          </div>
+        </Html>
+      )}
+
       {/* 머리 위 내 닉네임 명찰 (모바일 최적화: 기존 distanceFactor 14 -> 3.5로 축소하여 실제 화면 너비 25% 구현) */}
       <Html position={[0, 1.18, 0]} center distanceFactor={3.5}>
         <div

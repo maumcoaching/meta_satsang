@@ -25,8 +25,8 @@ export const IncenseSmoke: React.FC = () => {
     const op = new Float32Array(count);
 
     for (let i = 0; i < count; i++) {
-      // 시작 시점에 연속적인 연기 기둥이 이미 솟아있도록 life를 고르게 분산
-      const initialLife = i / count;
+      // 헌향 직후 향 끝에서부터 연기가 자연스럽게 피어오르도록 초기 수명 설정
+      const initialLife = (i / count) * 0.25;
       pts.push({
         life: initialLife,
         speed: 0.26 + Math.random() * 0.08,

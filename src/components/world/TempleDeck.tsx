@@ -1,14 +1,53 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { sound } from '../audio/SoundEffects';
+import { sharedControls } from '../player/usePlayerControls';
 import { IncenseSmoke } from './IncenseSmoke';
+
+const INCENSE_BURN_DURATION = 180; // 3분 (180초)
+const LIGHTING_ANIM_DURATION = 2.8; // 촛불에 불 붙여 향로에 꽂는 애니메이션 시간 (2.8초)
 
 export const TempleDeck: React.FC = () => {
   const bellRef = useRef<THREE.Group>(null);
   const lanternLightRef = useRef<THREE.PointLight>(null);
 
-  useFrame((state) => {
+  // 헌향(향 피우기) 상태 및 애니메이션 레퍼런스
+  const [isNearAltar, setIsNearAltar] = useState(false);
+  const [incenseStage, setIncenseStage] = useState<'idle' | 'lighting' | 'burning'>('idle');
+  const [remainingSeconds, setRemainingSeconds] = useState(INCENSE_BURN_DURATION);
+
+  const nearAltarRef = useRef(false);
+  const incenseStageRef = useRef<'idle' | 'lighting' | 'burning'>('idle');
+  const incenseElapsedRef = useRef(0);
+  const lastReportedSecRef = useRef(INCENSE_BURN_DURATION);
+
+  const activeStickGroupRef = useRef<THREE.Group>(null);
+  const stickMeshRef = useRef<THREE.Mesh>(null);
+  const stickFlameRef = useRef<THREE.Group>(null);
+  const smokeWrapperRef = useRef<THREE.Group>(null);
+
+  // 헌향 버튼 클릭 핸들러
+  const handleOfferIncense = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    sound.playSingingBowl();
+
+    // 캐릭터가 불단을 향해 정성스럽게 합장 인사하도록 유도 (2.6초간)
+    sharedControls.bow = true;
+    sharedControls.meditate = false;
+    window.setTimeout(() => {
+      sharedControls.bow = false;
+    }, 2600);
+
+    incenseElapsedRef.current = 0;
+    incenseStageRef.current = 'lighting';
+    setIncenseStage('lighting');
+    lastReportedSecRef.current = INCENSE_BURN_DURATION;
+    setRemainingSeconds(INCENSE_BURN_DURATION);
+  };
+
+  useFrame((state, delta) => {
     const time = state.clock.getElapsedTime();
 
     // 1. 처마 끝 풍경(종)의 미세한 자연 흔들림
@@ -20,6 +59,99 @@ export const TempleDeck: React.FC = () => {
     // 2. 석등 불빛 깜빡임
     if (lanternLightRef.current) {
       lanternLightRef.current.intensity = 1.4 + Math.sin(time * 6) * 0.15 + Math.cos(time * 13) * 0.1;
+    }
+
+    // 3. 불단(향로: x=0, z=-5.4) 근처 접근 감지 (반경 3.8m 이내일 때 '헌향' 버튼 표시)
+    const distToAltar = Math.hypot(sharedControls.playerX - 0, sharedControls.playerZ - (-4.8));
+    const isNear = distToAltar <= 3.8;
+    if (isNear !== nearAltarRef.current) {
+      nearAltarRef.current = isNear;
+      setIsNearAltar(isNear);
+    }
+
+    // 4. 헌향 애니메이션 (불 붙이기 -> 향로에 꽂기 -> 3분간 타오르기)
+    if (incenseStageRef.current === 'lighting') {
+      incenseElapsedRef.current += delta;
+      const t = incenseElapsedRef.current;
+
+      if (activeStickGroupRef.current && stickMeshRef.current && stickFlameRef.current) {
+        stickMeshRef.current.scale.set(1, 1, 1);
+        stickMeshRef.current.position.set(0, 0.11, 0);
+
+        if (t < 0.85) {
+          // [단계 A] 0.0~0.85초: 좌측 향통(-0.42, 1.08, 0.25)에서 우측 촛불(0.95, 1.28, 0.2)로 향을 가져감
+          const p = THREE.MathUtils.smoothstep(t / 0.85, 0, 1);
+          activeStickGroupRef.current.position.set(
+            THREE.MathUtils.lerp(-0.42, 0.95, p),
+            THREE.MathUtils.lerp(1.08, 1.28, p),
+            THREE.MathUtils.lerp(0.25, 0.20, p)
+          );
+          // 향 끝이 우측 촛불(x=1.1, y=1.41, z=0.18)에 닿도록 비스듬히 기울임
+          activeStickGroupRef.current.rotation.set(0, 0, THREE.MathUtils.lerp(0, -0.78, p));
+          stickFlameRef.current.visible = false;
+        } else if (t < 1.75) {
+          // [단계 B] 0.85~1.75초: 촛불에서 향 끝에 불꽃이 타오르며 점화됨
+          activeStickGroupRef.current.position.set(0.95, 1.28, 0.20);
+          activeStickGroupRef.current.rotation.set(0, 0, -0.78);
+          stickFlameRef.current.visible = true;
+          const flicker = 0.9 + Math.sin(time * 28) * 0.25;
+          stickFlameRef.current.scale.set(flicker, flicker * 1.2, flicker);
+        } else if (t < 2.35) {
+          // [단계 C] 1.75~2.35초: 불 붙은 향을 들어 올려 향로 정중앙 위(0, 1.24, 0.2)로 옮기며 수직으로 세움
+          const p = THREE.MathUtils.smoothstep((t - 1.75) / 0.6, 0, 1);
+          activeStickGroupRef.current.position.set(
+            THREE.MathUtils.lerp(0.95, 0, p),
+            THREE.MathUtils.lerp(1.28, 1.24, p) + Math.sin(p * Math.PI) * 0.08,
+            THREE.MathUtils.lerp(0.20, 0.20, p)
+          );
+          activeStickGroupRef.current.rotation.set(0, 0, THREE.MathUtils.lerp(-0.78, 0, p));
+          stickFlameRef.current.visible = true;
+          const fadeFlame = 1.0 - p * 0.4;
+          stickFlameRef.current.scale.set(fadeFlame, fadeFlame, fadeFlame);
+        } else if (t < LIGHTING_ANIM_DURATION) {
+          // [단계 D] 2.35~2.8초: 향로 재(향재) 속으로 정성스럽게 수직으로 꽂음
+          const p = THREE.MathUtils.smoothstep((t - 2.35) / (LIGHTING_ANIM_DURATION - 2.35), 0, 1);
+          activeStickGroupRef.current.position.set(0, THREE.MathUtils.lerp(1.24, 1.02, p), 0.20);
+          activeStickGroupRef.current.rotation.set(0, 0, 0);
+          stickFlameRef.current.visible = p < 0.7;
+        } else {
+          // 꽂기 완료 -> 3분(180초) 연소 단계로 전환
+          activeStickGroupRef.current.position.set(0, 1.02, 0.20);
+          activeStickGroupRef.current.rotation.set(0, 0, 0);
+          stickFlameRef.current.visible = false;
+          incenseElapsedRef.current = 0;
+          incenseStageRef.current = 'burning';
+          setIncenseStage('burning');
+        }
+      }
+    } else if (incenseStageRef.current === 'burning') {
+      incenseElapsedRef.current += delta;
+      const burnTime = incenseElapsedRef.current;
+
+      if (burnTime >= INCENSE_BURN_DURATION) {
+        // 3분(180초) 경과 시 향이 다 타고 종료됨
+        incenseStageRef.current = 'idle';
+        setIncenseStage('idle');
+      } else {
+        // 3분 동안 향이 서서히 짧아지며 불씨와 연기도 함께 내려감
+        const burnProgress = burnTime / INCENSE_BURN_DURATION; // 0.0 ~ 1.0
+        const remainRatio = 1.0 - burnProgress * 0.82; // 1.0 -> 0.18
+
+        if (stickMeshRef.current) {
+          stickMeshRef.current.scale.set(1, remainRatio, 1);
+          stickMeshRef.current.position.set(0, 0.11 * remainRatio, 0);
+        }
+        if (smokeWrapperRef.current) {
+          // IncenseSmoke 기본 불씨 높이(y=0.22)를 현재 줄어든 향 끝 위치(0.22 * remainRatio)에 맞춤
+          smokeWrapperRef.current.position.set(0, -0.22 * (1.0 - remainRatio), 0);
+        }
+
+        const remSec = Math.max(0, Math.ceil(INCENSE_BURN_DURATION - burnTime));
+        if (remSec !== lastReportedSecRef.current) {
+          lastReportedSecRef.current = remSec;
+          setRemainingSeconds(remSec);
+        }
+      }
     }
   });
 
@@ -294,7 +426,7 @@ export const TempleDeck: React.FC = () => {
       ))}
 
       {/* ===================================================================
-          8. 법당 중앙 안쪽 불단 (수미단) & 향로, 향 연기
+          8. 법당 중앙 안쪽 불단 (수미단) & 인터랙티브 헌향(향 피우기) 시스템
          =================================================================== */}
       <group position={[0, 0.45, -5.6]}>
         {/* 장엄한 3단 목조 수미단 (불단 대좌) */}
@@ -308,31 +440,170 @@ export const TempleDeck: React.FC = () => {
           <meshStandardMaterial color="#4a220a" roughness={0.6} />
         </mesh>
 
-        {/* 황동 향로 및 타오르는 향 */}
+        {/* 좌측 원목 선향통 (불 붙이기 전의 향들이 꽂혀 있는 향통) */}
+        <group position={[-0.42, 0.91, 0.25]}>
+          <mesh position={[0, 0.06, 0]} castShadow>
+            <cylinderGeometry args={[0.042, 0.046, 0.12, 14]} />
+            <meshStandardMaterial color="#5c2d16" roughness={0.7} />
+          </mesh>
+          {[-0.012, 0, 0.012].map((ox, i) => (
+            <mesh key={i} position={[ox, 0.14, (i - 1) * 0.008]} rotation={[0, 0, ox * 2.5]}>
+              <cylinderGeometry args={[0.0035, 0.0035, 0.16, 6]} />
+              <meshBasicMaterial color="#991b1b" />
+            </mesh>
+          ))}
+        </group>
+
+        {/* 중앙 황동 향로 (평소에는 향이 없으며, '헌향' 시 향이 꽂혀 3분간 타오름) */}
         <group
-          position={[0, 0.95, 0.2]}
+          position={[0, 0.99, 0.20]}
           onClick={(e) => {
-            e.stopPropagation();
-            sound.playSingingBowl();
+            if (incenseStage === 'idle') {
+              handleOfferIncense(e);
+            } else {
+              e.stopPropagation();
+              sound.playSingingBowl();
+            }
           }}
         >
           {/* 놋쇠 향로 몸통 */}
-          <mesh castShadow>
-            <cylinderGeometry args={[0.16, 0.12, 0.16, 20]} />
-            <meshStandardMaterial color="#eab308" metalness={0.8} roughness={0.25} />
+          <mesh castShadow receiveShadow>
+            <cylinderGeometry args={[0.17, 0.13, 0.16, 24]} />
+            <meshStandardMaterial color="#eab308" metalness={0.78} roughness={0.25} />
           </mesh>
-          {/* 향 심지 */}
-          <mesh position={[0, 0.18, 0]}>
-            <cylinderGeometry args={[0.006, 0.006, 0.2, 8]} />
-            <meshBasicMaterial color="#b91c1c" />
+          {/* 향로 안쪽 고운 백회색 향재(재) */}
+          <mesh position={[0, 0.072, 0]} receiveShadow>
+            <cylinderGeometry args={[0.15, 0.15, 0.02, 20]} />
+            <meshStandardMaterial color="#d6d3d1" roughness={0.95} />
           </mesh>
-          {/* 맑고 그윽한 가우시안 물리 향 연기 */}
-          <IncenseSmoke />
         </group>
 
-        {/* 좌우 놋쇠 촛대 및 촛불 */}
-        {[-1.6, 1.6].map((cx, idx) => (
-          <group key={idx} position={[cx, 0.91, 0.15]}>
+        {/* 헌향 진행 중(불 붙이기 -> 향로에 꽂기 -> 3분간 연소)인 향 스틱 & 불꽃 & 연기 */}
+        <group
+          ref={activeStickGroupRef}
+          position={[0, 1.02, 0.20]}
+          visible={incenseStage !== 'idle'}
+        >
+          {/* 타들어가는 선향 막대 (3분 동안 서서히 짧아짐) */}
+          <mesh ref={stickMeshRef} position={[0, 0.11, 0]}>
+            <cylinderGeometry args={[0.0055, 0.0055, 0.22, 8]} />
+            <meshBasicMaterial color="#b91c1c" />
+          </mesh>
+
+          {/* 촛불에서 점화될 때 향 끝에서 타오르는 불꽃 (lighting 단계에서만 표시) */}
+          <group ref={stickFlameRef} position={[0, 0.225, 0]} visible={false}>
+            <mesh>
+              <sphereGeometry args={[0.024, 10, 10]} />
+              <meshBasicMaterial color="#f59e0b" />
+            </mesh>
+            <mesh position={[0, 0.01, 0]}>
+              <sphereGeometry args={[0.013, 8, 8]} />
+              <meshBasicMaterial color="#fef08a" />
+            </mesh>
+            <pointLight color="#ff9500" intensity={1.1} distance={1.8} decay={2} />
+          </group>
+
+          {/* 향로에 꽂힌 뒤 3분 동안 피어오르는 붉은 불씨와 향 연기 (burning 단계에서만 표시) */}
+          {incenseStage === 'burning' && (
+            <group ref={smokeWrapperRef}>
+              <IncenseSmoke />
+            </group>
+          )}
+        </group>
+
+        {/* 불단 가까이에 다가왔을 때 나타나는 '헌향' 인터랙션 버튼 */}
+        {isNearAltar && (
+          <Html position={[0, 1.62, 0.35]} center>
+            <div style={{ pointerEvents: 'auto' }}>
+              {incenseStage === 'idle' && (
+                <button
+                  onClick={handleOfferIncense}
+                  style={{
+                    padding: '9px 22px',
+                    borderRadius: 24,
+                    background: 'linear-gradient(135deg, #78350f 0%, #451a03 100%)',
+                    color: '#fef3c7',
+                    border: '1.5px solid #f59e0b',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.4), 0 0 12px rgba(245, 158, 11, 0.35)',
+                    fontSize: 15,
+                    fontWeight: 700,
+                    fontFamily: "'Noto Serif KR', serif",
+                    letterSpacing: 1.5,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <span>🕯️</span>
+                  <span>헌향</span>
+                </button>
+              )}
+
+              {incenseStage === 'lighting' && (
+                <div
+                  style={{
+                    padding: '7px 16px',
+                    borderRadius: 20,
+                    backgroundColor: 'rgba(28, 25, 23, 0.85)',
+                    color: '#fde68a',
+                    border: '1px solid rgba(245, 158, 11, 0.5)',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
+                  }}
+                >
+                  🔥 촛불에 향을 사르어 올리는 중...
+                </div>
+              )}
+
+              {incenseStage === 'burning' && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '6px 14px',
+                    borderRadius: 20,
+                    backgroundColor: 'rgba(28, 25, 23, 0.78)',
+                    backdropFilter: 'blur(4px)',
+                    color: '#fef3c7',
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    fontSize: 12,
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+                  }}
+                >
+                  <span>
+                    🕯️ 향이 타오르는 중 ({Math.floor(remainingSeconds / 60)}:
+                    {String(remainingSeconds % 60).padStart(2, '0')})
+                  </span>
+                  <button
+                    onClick={handleOfferIncense}
+                    style={{
+                      padding: '2px 8px',
+                      borderRadius: 12,
+                      backgroundColor: '#78350f',
+                      color: '#fde68a',
+                      border: '1px solid #d97706',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    다시 헌향
+                  </button>
+                </div>
+              )}
+            </div>
+          </Html>
+        )}
+
+        {/* 좌우 놋쇠 촛대 및 촛불 (우측 촛불 위치 [1.1, 1.41, 0.18]에서 향에 불을 붙임) */}
+        {[-1.1, 1.1].map((cx, idx) => (
+          <group key={idx} position={[cx, 0.91, 0.18]}>
             {/* 황동 촛대 */}
             <mesh position={[0, 0.15, 0]} castShadow>
               <cylinderGeometry args={[0.04, 0.1, 0.3, 14]} />
@@ -345,7 +616,7 @@ export const TempleDeck: React.FC = () => {
             </mesh>
             {/* 촛불 불꽃 */}
             <mesh position={[0, 0.5, 0]}>
-              <sphereGeometry args={[0.025, 8, 8]} />
+              <sphereGeometry args={[0.026, 8, 8]} />
               <meshBasicMaterial color="#f59e0b" />
             </mesh>
             <pointLight position={[0, 0.52, 0]} color="#f59e0b" intensity={0.6} distance={3.5} decay={2} />
@@ -353,11 +624,11 @@ export const TempleDeck: React.FC = () => {
         ))}
 
         {/* 좌우 청동 다기/싱잉볼 */}
-        <mesh position={[-0.8, 0.96, 0.25]} castShadow>
+        <mesh position={[-0.72, 0.96, 0.25]} castShadow>
           <cylinderGeometry args={[0.1, 0.06, 0.1, 14]} />
           <meshStandardMaterial color="#d97706" metalness={0.75} roughness={0.3} />
         </mesh>
-        <mesh position={[0.8, 0.96, 0.25]} castShadow>
+        <mesh position={[0.72, 0.96, 0.25]} castShadow>
           <cylinderGeometry args={[0.1, 0.06, 0.1, 14]} />
           <meshStandardMaterial color="#d97706" metalness={0.75} roughness={0.3} />
         </mesh>

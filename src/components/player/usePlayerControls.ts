@@ -10,6 +10,8 @@ export interface PlayerControlsState {
   bow: boolean;
   joystickX: number;
   joystickY: number;
+  playerX: number;
+  playerZ: number;
 }
 
 // 싱글톤 상태로 모바일 조이스틱과 키보드 입력을 공유
@@ -23,6 +25,8 @@ export const sharedControls: PlayerControlsState = {
   bow: false,
   joystickX: 0,
   joystickY: 0,
+  playerX: 0,
+  playerZ: 4.5,
 };
 
 export function usePlayerControls() {

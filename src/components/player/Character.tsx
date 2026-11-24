@@ -199,6 +199,8 @@ export const Character: React.FC = () => {
     }
 
     group.current.position.copy(position.current);
+    sharedControls.playerX = position.current.x;
+    sharedControls.playerZ = position.current.z;
 
     // 4. 애니메이션 (발걸음, 좌선, 합장, 호흡)
     const time = state.clock.getElapsedTime();

@@ -2,100 +2,128 @@ import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-interface SmokeParticle {
-  life: number;        // 0.0 (생성) ~ 1.0 (소멸)
-  speed: number;       // 상승 속도
-  curlPhase: number;   // 흔들림 위상차
-  driftAngle: number;  // 방 안의 미세한 공기 흐름 방향
-  curlFreq: number;    // 회오리 주파수
+interface StreamNode {
+  life: number;       // 0.0 (향 끝) ~ 1.0 (상단 소멸)
+  speed: number;      // 일정한 상승 유속
+  microOffset: number; // 한 줄기 내부의 미세한 결 차이
 }
 
 export const IncenseSmoke: React.FC = () => {
   const pointsRef = useRef<THREE.Points>(null);
   const emberLightRef = useRef<THREE.PointLight>(null);
-  const stemLineRef = useRef<THREE.Line>(null);
+  const streamLineRef = useRef<THREE.Line>(null);
 
-  const count = 75; // 자연스러운 연기 입자 수
+  // 한 줄기 얇은 물줄기처럼 매끄럽게 이어지는 미세 입자 수
+  const count = 60;
+  const streamSegments = 72;
 
-  // 1. 파티클 기본 물리 속성 및 버퍼 배열 생성
-  const { particles, positions, sizes, opacities } = useMemo(() => {
-    const pts: SmokeParticle[] = [];
+  // 단일 물줄기 파동 함수: 위쪽으로 유려하게 흘러 올라가는 단일 S자 실줄기 궤적
+  const getStreamOffset = (l: number, time: number) => {
+    // (l * 주파수 - time * 유속) 형태로 파동 자체가 아래에서 위로 물 흐르듯 타고 올라감
+    const flowPhase = l * 7.2 - time * 2.1;
+    const secondaryPhase = l * 3.6 - time * 1.15;
+    const sway = Math.pow(l, 1.15) * 0.028; // 옆으로 퍼지지 않고 가느다란 한 줄기 유지
+    const x = Math.sin(flowPhase) * sway + Math.sin(secondaryPhase) * (l * 0.01);
+    const z = Math.cos(flowPhase * 0.85) * (sway * 0.75);
+    return { x, z };
+  };
+
+  // 1. 한 줄기 궤적을 따라 흐르는 미세 물결 입자 초기화
+  const { nodes, positions, sizes, opacities } = useMemo(() => {
+    const list: StreamNode[] = [];
     const pos = new Float32Array(count * 3);
     const sz = new Float32Array(count);
     const op = new Float32Array(count);
 
     for (let i = 0; i < count; i++) {
-      // 헌향 직후 향 끝에서부터 연기가 자연스럽게 피어오르도록 초기 수명 설정
-      const initialLife = (i / count) * 0.25;
-      pts.push({
-        life: initialLife,
-        speed: 0.26 + Math.random() * 0.08,
-        curlPhase: Math.random() * Math.PI * 2,
-        driftAngle: Math.random() * Math.PI * 2,
-        curlFreq: 2.8 + Math.random() * 1.5,
+      list.push({
+        life: i / count,
+        speed: 0.28, // 모든 입자가 한 줄기 물처럼 동일한 속도로 매끄럽게 상승
+        microOffset: (i % 3 - 1) * 0.0015,
       });
 
       pos[i * 3 + 0] = 0;
       pos[i * 3 + 1] = 0.22;
       pos[i * 3 + 2] = 0;
 
-      sz[i] = 10;
+      sz[i] = 5;
       op[i] = 0;
     }
 
-    return { particles: pts, positions: pos, sizes: sz, opacities: op };
+    return { nodes: list, positions: pos, sizes: sz, opacities: op };
   }, []);
 
-  // 2. 가느다란 선향 하단 실줄기 (Laminar Stream) 지오메트리
-  const stemSegments = 16;
-  const stemGeometry = useMemo(() => {
+  // 2. 향 끝에서 상단까지 끊김 없이 이어지는 한 줄기 실크 물줄기 라인 지오메트리 & 셰이더
+  const { streamGeometry, streamLineMaterial } = useMemo(() => {
     const geo = new THREE.BufferGeometry();
-    const pos = new Float32Array((stemSegments + 1) * 3);
+    const pos = new Float32Array((streamSegments + 1) * 3);
+    const prog = new Float32Array(streamSegments + 1);
+
+    for (let j = 0; j <= streamSegments; j++) {
+      prog[j] = j / streamSegments;
+    }
+
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    return geo;
+    geo.setAttribute('aProgress', new THREE.BufferAttribute(prog, 1));
+
+    const mat = new THREE.ShaderMaterial({
+      vertexShader: `
+        attribute float aProgress;
+        varying float vAlpha;
+        void main() {
+          // 하단은 선명하고 위로 올라갈수록 물결처럼 부드럽게 사라짐
+          float fadeIn = smoothstep(0.0, 0.06, aProgress);
+          float fadeOut = 1.0 - smoothstep(0.25, 1.0, aProgress);
+          vAlpha = fadeIn * fadeOut * 0.42;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying float vAlpha;
+        void main() {
+          gl_FragColor = vec4(0.90, 0.93, 0.97, vAlpha);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+    });
+
+    return { streamGeometry: geo, streamLineMaterial: mat };
   }, []);
 
-  // 3. 부드러운 가우시안 원형 연기 셰이더 (각진 사각형 방지)
+  // 3. 한 줄기를 감싸는 얇고 투명한 물결 윤기 셰이더 (넓게 퍼지는 구름 효과 제거)
   const smokeMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
       vertexShader: `
         attribute float aSize;
         attribute float aOpacity;
         varying float vOpacity;
-        varying float vHeightProgress;
 
         void main() {
           vOpacity = aOpacity;
           vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-          
-          // 3D 원근에 따른 부드러운 크기 스케일링
-          float pSize = aSize * (260.0 / -mvPosition.z);
-          gl_PointSize = clamp(pSize, 1.0, 160.0);
+          float pSize = aSize * (220.0 / -mvPosition.z);
+          gl_PointSize = clamp(pSize, 1.0, 32.0);
           gl_Position = projectionMatrix * mvPosition;
         }
       `,
       fragmentShader: `
         uniform vec3 uBaseColor;
-        uniform vec3 uFadeColor;
         varying float vOpacity;
 
         void main() {
-          // 중앙 기준 (-0.5 ~ 0.5)
           vec2 coord = gl_PointCoord - vec2(0.5);
           float dist = length(coord);
           if (dist > 0.5) discard;
 
-          // 완벽하게 둥글고 가장자리가 몽환적으로 흐려지는 연기 감쇠 (Gaussian falloff)
-          float alpha = smoothstep(0.5, 0.02, dist);
-          alpha = pow(alpha, 1.5) * vOpacity;
+          float alpha = smoothstep(0.5, 0.05, dist);
+          alpha = pow(alpha, 1.8) * vOpacity;
 
-          // 부드러운 백회색 연기 컬러
           gl_FragColor = vec4(uBaseColor, alpha);
         }
       `,
       uniforms: {
-        uBaseColor: { value: new THREE.Color('#e0e4eb') },
-        uFadeColor: { value: new THREE.Color('#cbd5e1') },
+        uBaseColor: { value: new THREE.Color('#e8eef5') },
       },
       transparent: true,
       depthWrite: false,
@@ -105,33 +133,31 @@ export const IncenseSmoke: React.FC = () => {
 
   useFrame((state, delta) => {
     const time = state.clock.getElapsedTime();
+    const totalHeight = 0.95;
 
-    // 1. 향 끝의 붉은 불씨 미세한 숨결 깜빡임
+    // 1. 향 끝의 붉은 불씨 미세한 숨결
     if (emberLightRef.current) {
-      emberLightRef.current.intensity = 0.25 + Math.sin(time * 5) * 0.08 + Math.cos(time * 11) * 0.04;
+      emberLightRef.current.intensity = 0.22 + Math.sin(time * 5) * 0.06;
     }
 
-    // 2. 하단부 매끄러운 연기 실줄기 (Laminar ribbon) 곡선 업데이트
-    if (stemLineRef.current) {
-      const stemPos = stemGeometry.attributes.position as THREE.BufferAttribute;
-      const stemArr = stemPos.array as Float32Array;
-      const stemHeight = 0.16;
+    // 2. 한 줄기 얇은 물결 실선(Laminar Stream) 업데이트
+    if (streamLineRef.current) {
+      const posAttr = streamGeometry.attributes.position as THREE.BufferAttribute;
+      const arr = posAttr.array as Float32Array;
 
-      for (let j = 0; j <= stemSegments; j++) {
-        const t = j / stemSegments;
-        const y = 0.22 + t * stemHeight;
-        // 미세하게 살랑이는 바람 웨이브
-        const curveX = Math.sin(time * 3.0 + t * 4.0) * (t * t * 0.015);
-        const curveZ = Math.cos(time * 2.5 + t * 3.5) * (t * t * 0.012);
+      for (let j = 0; j <= streamSegments; j++) {
+        const l = j / streamSegments;
+        const y = 0.22 + l * totalHeight;
+        const { x, z } = getStreamOffset(l, time);
 
-        stemArr[j * 3 + 0] = curveX;
-        stemArr[j * 3 + 1] = y;
-        stemArr[j * 3 + 2] = curveZ;
+        arr[j * 3 + 0] = x;
+        arr[j * 3 + 1] = y;
+        arr[j * 3 + 2] = z;
       }
-      stemPos.needsUpdate = true;
+      posAttr.needsUpdate = true;
     }
 
-    // 3. 연기 파티클 구름 업데이트
+    // 3. 실선과 동일한 단일 궤적을 따라 위로 흐르는 얇은 물결 입자 업데이트
     if (pointsRef.current) {
       const geo = pointsRef.current.geometry;
       const posAttr = geo.attributes.position as THREE.BufferAttribute;
@@ -143,47 +169,31 @@ export const IncenseSmoke: React.FC = () => {
       const opArr = opAttr.array as Float32Array;
 
       for (let i = 0; i < count; i++) {
-        const p = particles[i];
-
-        // 수명 진행
-        p.life += p.speed * delta * 0.65;
-        if (p.life > 1.0) {
-          p.life = 0;
-          p.driftAngle = Math.random() * Math.PI * 2;
+        const n = nodes[i];
+        n.life += n.speed * delta;
+        if (n.life > 1.0) {
+          n.life -= 1.0;
         }
 
-        const l = p.life;
+        const l = n.life;
+        const currentY = 0.22 + l * totalHeight;
+        const { x, z } = getStreamOffset(l, time);
 
-        // 높이: 처음엔 천천히 피어나다 위로 갈수록 공기 대류를 타고 부드럽게 상승
-        const currentY = 0.22 + Math.pow(l, 0.85) * 1.15;
-
-        // 수평 회오리 및 살랑임 (하단은 좁고, 상부로 갈수록 풍성하게 번짐)
-        const spreadRadius = Math.pow(l, 1.4) * 0.09;
-        const waveX = Math.sin(time * p.curlFreq + l * 8.0 + p.curlPhase) * spreadRadius;
-        const waveZ = Math.cos(time * (p.curlFreq * 0.85) + l * 7.0 + p.curlPhase) * spreadRadius;
-
-        // 미세한 한쪽 방향 공기 대류
-        const driftX = Math.cos(p.driftAngle) * (l * 0.035);
-        const driftZ = Math.sin(p.driftAngle) * (l * 0.035);
-
-        posArr[i * 3 + 0] = waveX + driftX;
+        posArr[i * 3 + 0] = x + n.microOffset;
         posArr[i * 3 + 1] = currentY;
-        posArr[i * 3 + 2] = waveZ + driftZ;
+        posArr[i * 3 + 2] = z;
 
-        // 크기(Size): 향 끝에서는 가느다랗게 시작(8)해서, 위로 올라갈수록 몽환적인 구름처럼 확장(50~80)
-        sizeArr[i] = 10 + Math.pow(l, 0.7) * 75;
+        // 퍼지지 않고 끝까지 가느다란 한 줄기 두께(5 ~ 13) 유지
+        sizeArr[i] = 5.0 + l * 8.0;
 
-        // 투명도(Opacity):
-        // 0~0.15: 서서히 나타남
-        // 0.15~0.5: 또렷하게 피어오름
-        // 0.5~1.0: 공기 중으로 서서히 흔적 없이 흩어짐
+        // 투명도: 과하지 않고 맑고 은은한 한 줄기 흐름
         let alpha = 0;
-        if (l < 0.15) {
-          alpha = (l / 0.15) * 0.42;
-        } else if (l < 0.5) {
-          alpha = 0.42 - (l - 0.15) * 0.15;
+        if (l < 0.08) {
+          alpha = (l / 0.08) * 0.24;
+        } else if (l < 0.7) {
+          alpha = 0.24 * (1.0 - (l - 0.08) * 0.35);
         } else {
-          alpha = 0.37 * (1.0 - (l - 0.5) / 0.5);
+          alpha = 0.18 * (1.0 - (l - 0.7) / 0.3);
         }
 
         opArr[i] = Math.max(0, alpha);
@@ -197,29 +207,24 @@ export const IncenseSmoke: React.FC = () => {
 
   return (
     <group position={[0, 0, 0]}>
-      {/* 1. 향 끝의 타오르는 붉은 불씨 & 은은한 광원 */}
+      {/* 1. 향 끝의 작은 붉은 불씨 */}
       <mesh position={[0, 0.22, 0]}>
-        <sphereGeometry args={[0.014, 12, 12]} />
+        <sphereGeometry args={[0.01, 10, 10]} />
         <meshBasicMaterial color="#ff4d00" />
       </mesh>
       <pointLight
         ref={emberLightRef}
         position={[0, 0.225, 0]}
         color="#ff7a00"
-        intensity={0.25}
-        distance={0.8}
+        intensity={0.22}
+        distance={0.6}
         decay={2}
       />
 
-      {/* 2. 향 끝에서 피어나는 가느다란 연기 실줄기 (Laminar Stream) */}
-      <primitive object={new THREE.Line(stemGeometry, new THREE.LineBasicMaterial({
-        color: '#e2e8f0',
-        transparent: true,
-        opacity: 0.35,
-        linewidth: 1,
-      }))} ref={stemLineRef} />
+      {/* 2. 한 줄기 얇은 물처럼 위로 흘러 올라가는 연속 실줄기 */}
+      <primitive object={new THREE.Line(streamGeometry, streamLineMaterial)} ref={streamLineRef} />
 
-      {/* 3. 몽환적으로 피어오르는 부드러운 가우시안 연기 입자 구름 */}
+      {/* 3. 실줄기 궤적을 따라 함께 흐르는 가느다란 윤기 입자 */}
       <points ref={pointsRef} material={smokeMaterial}>
         <bufferGeometry>
           <bufferAttribute

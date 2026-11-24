@@ -116,8 +116,8 @@ export const CircleDeck: React.FC<Props> = ({
         </group>
       ))}
 
-      {/* 6. 서원동산 중앙 금동미륵보살반가사유상 조각상 (클릭 시 맑은 싱잉볼 명상음) */}
-      <MaitreyaStatue position={[0, deckHeight, 0]} rotation={[0, 1.85, 0]} />
+      {/* 6. 서원동산 중앙 금동미륵보살반가사유상 3D 조각상 (금강좌를 등지고 남쪽 정면을 바라봄) */}
+      <MaitreyaStatue position={[0, deckHeight, 0]} rotation={[0, 0, 0]} />
 
       {/* 7. 연못에서 데크로 이어지는 자연스러운 돌길 */}
       <group position={[-centerX, -centerY, -centerZ]}>

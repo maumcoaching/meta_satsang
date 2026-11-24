@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { sound } from '../audio/SoundEffects';
 
@@ -9,17 +10,34 @@ interface Props {
 
 export const MaitreyaStatue: React.FC<Props> = ({
   position = [0, 0, 0],
-  rotation = [0, 1.85, 0], // 서원동산 진입로(연못 디딤돌 방향)를 향해 정면으로 바라보도록 설정
+  rotation = [0, 0, 0], // 북쪽 금강좌(-Z)를 등지고 남쪽(+Z) 정면을 바라보도록 배치
 }) => {
-  // 1. 실제 사진에서 정밀 추출한 고화질 금동미륵보살반가사유상 실물 텍스처
-  const statueTexture = useMemo(() => {
-    const loader = new THREE.TextureLoader();
-    const tex = loader.load('/statue/statue_cutout.png');
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
-  }, []);
+  // 1. 사용자 제공 정밀 3D 반가사유상 모델(maitreya.glb) 로드
+  const { scene } = useGLTF('/models/maitreya.glb');
 
-  // 2. 화강암 석조 좌대 재질
+  // GLB 내부 메쉬 지오메트리 추출 (원본 버텍스는 Y축이 위쪽[0~912.7mm], +Z축이 정면)
+  const statueGeometry = useMemo(() => {
+    let found: THREE.BufferGeometry | null = null;
+    scene.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh && !found) {
+        found = (child as THREE.Mesh).geometry;
+      }
+    });
+    return found;
+  }, [scene]);
+
+  // 2. 실제 사진 속 청동 반가사유상의 깊이감 있는 앤틱 청동 파티나(Bronze Patina) 재질
+  const bronzeMaterial = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: '#4e5d55',
+        roughness: 0.42,
+        metalness: 0.52,
+      }),
+    []
+  );
+
+  // 3. 화강암 석조 좌대 재질
   const graniteMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
@@ -30,7 +48,7 @@ export const MaitreyaStatue: React.FC<Props> = ({
     []
   );
 
-  // 3. 황금빛 일산(갓등) 폴대 & 캐노피 재질
+  // 4. 황금빛 일산(갓등) 폴대 & 캐노피 재질
   const goldMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
@@ -41,31 +59,20 @@ export const MaitreyaStatue: React.FC<Props> = ({
     []
   );
 
-  // 4. 하단 청동 좌대 링 재질
-  const bronzeBaseMaterial = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: '#2a332f',
-        roughness: 0.6,
-        metalness: 0.3,
-      }),
-    []
-  );
-
-  // 5. 머리 위 황금빛 일산(캐노피) 곡선 파이프 (Smooth Arch Curve)
+  // 5. 등 뒤에서 솟아올라 머리 위를 덮는 황금빛 일산(캐노피) 곡선 파이프 (사진과 동일하게 등 뒤 배치)
   const archPoints = useMemo(() => {
     const curve = new THREE.CubicBezierCurve3(
-      new THREE.Vector3(-0.72, 0.5, 0.3),  // 석좌대 옆 지지점
-      new THREE.Vector3(-0.75, 2.4, 0.2),  // 위로 솟구침
-      new THREE.Vector3(-0.35, 3.1, 0.1),  // 곡선 굴곡
-      new THREE.Vector3(0.0, 2.95, 0.05)   // 머리 위 캐노피 중심
+      new THREE.Vector3(0.08, 0.3, -0.82),  // 석좌대 뒷면 지지점
+      new THREE.Vector3(0.06, 2.3, -0.84),  // 등 뒤를 따라 수직 상승
+      new THREE.Vector3(0.03, 3.18, -0.45), // 머리 뒤에서 앞으로 부드럽게 굴곡
+      new THREE.Vector3(0.0, 3.04, 0.06)    // 반가사유상 보관(삼산관) 바로 위 캐노피 중심
     );
-    return curve.getPoints(32);
+    return curve.getPoints(36);
   }, []);
 
   const pedestalTopY = 1.09;
-  const statueHeight = 1.95;
-  const statueWidth = 1.05; // 301 / 560 비율 정확히 일치 (비틀림/왜곡 없음)
+  // 원본 높이 912.67mm * 0.00192 = 약 1.75m (석좌대 1.09m 위 총 높이 약 2.84m)
+  const statueScale = 0.00192;
 
   return (
     <group
@@ -93,57 +100,45 @@ export const MaitreyaStatue: React.FC<Props> = ({
       </mesh>
 
       {/* ========================================================
-          2. 청동 연화 원형 좌대 발판 (Bronze Plinth Base)
+          2. 정밀 3D 금동미륵보살반가사유상 (maitreya.glb)
+             - 금강좌(-Z)를 등지고 남쪽(+Z)을 향해 고요히 사유하는 자태
          ======================================================== */}
-      <mesh position={[0, pedestalTopY + 0.06, 0]} receiveShadow castShadow material={bronzeBaseMaterial}>
-        <cylinderGeometry args={[0.48, 0.54, 0.12, 32]} />
-      </mesh>
-
-      {/* ========================================================
-          3. 사진 속 아름다운 실물 금동미륵보살반가사유상 (단일 정면 스탠디)
-         ======================================================== */}
-      {/* 겹침 없는 단일 정면 단독 평면 - 원본 사진의 자연광과 색감을 100% 명확하게 렌더링 */}
-      <mesh position={[0, pedestalTopY + statueHeight / 2 + 0.05, 0]}>
-        <planeGeometry args={[statueWidth, statueHeight]} />
-        <meshBasicMaterial
-          map={statueTexture}
-          transparent
-          alphaTest={0.08}
-          side={THREE.DoubleSide}
+      {statueGeometry && (
+        <mesh
+          geometry={statueGeometry}
+          material={bronzeMaterial}
+          position={[0.02, pedestalTopY, -0.04]}
+          scale={[statueScale, statueScale, statueScale]}
+          castShadow
+          receiveShadow
         />
-      </mesh>
+      )}
 
       {/* ========================================================
-          4. 사진 속 황금빛 일산(갓등) 폴대 & 캐노피 (조명 OFF)
+          3. 사진 속 황금빛 일산(갓등) 폴대 & 캐노피 (등 뒤에서 머리 위로)
          ======================================================== */}
-      {/* 바닥 좌대 옆에서 솟아올라 머리 위로 우아하게 휜 황금 파이프 */}
-      <mesh material={goldMaterial}>
-        <tubeGeometry args={[new THREE.CatmullRomCurve3(archPoints), 32, 0.022, 10, false]} />
+      <mesh material={goldMaterial} castShadow>
+        <tubeGeometry args={[new THREE.CatmullRomCurve3(archPoints), 36, 0.022, 12, false]} />
       </mesh>
 
       {/* 머리 위에 떠 있는 둥근 우산형 황금 갓(일산 / 캐노피) */}
-      <group position={[0.0, 2.95, 0.05]}>
-        {/* 상단 둥근 갓 */}
-        <mesh position={[0, 0.02, 0]} material={goldMaterial}>
+      <group position={[0.0, 3.04, 0.06]}>
+        <mesh position={[0, 0.02, 0]} material={goldMaterial} castShadow>
           <cylinderGeometry args={[0.44, 0.46, 0.04, 32]} />
         </mesh>
-        {/* 하단 황금 반사판 */}
         <mesh position={[0, -0.005, 0]}>
           <cylinderGeometry args={[0.42, 0.42, 0.01, 32]} />
           <meshBasicMaterial color="#fef08a" />
         </mesh>
-        {/* 인공 조명 OFF - 사진 본래의 맑은 톤 보존 */}
       </group>
 
       {/* ========================================================
-          5. 사진 속 측면 작은 노란색 다도/소품 선반 & 램프
+          4. 사진 속 측면 작은 노란색 다도/소품 선반 & 유리 호롱등
          ======================================================== */}
-      <group position={[-1.15, 0, 0.4]} rotation={[0, 0.4, 0]}>
-        {/* 작은 2단 노란색 원목 선반 */}
-        <mesh position={[0, 0.32, 0]} material={goldMaterial}>
+      <group position={[-1.12, 0, 0.25]} rotation={[0, 0.15, 0]}>
+        <mesh position={[0, 0.32, 0]} castShadow material={goldMaterial}>
           <boxGeometry args={[0.38, 0.64, 0.32]} />
         </mesh>
-        {/* 선반 위 투명 유리 랜턴 (조명 OFF) */}
         <group position={[0, 0.72, 0]}>
           <mesh>
             <cylinderGeometry args={[0.08, 0.09, 0.16, 12]} />
@@ -158,3 +153,5 @@ export const MaitreyaStatue: React.FC<Props> = ({
     </group>
   );
 };
+
+useGLTF.preload('/models/maitreya.glb');

@@ -69,7 +69,6 @@ export const Character: React.FC = () => {
   // 좌복 위 절하기(오체투지 큰절) 상태 관리
   const [isOnCushion, setIsOnCushion] = useState(false);
   const [isProstrating, setIsProstrating] = useState(false);
-  const [bowCount, setBowCount] = useState(0);
 
   const onCushionRef = useRef(false);
   const activeCushionPosRef = useRef<{ x: number; z: number } | null>(null);
@@ -275,7 +274,6 @@ export const Character: React.FC = () => {
       if (prostrateTimerRef.current >= PROSTRATE_DURATION) {
         sharedControls.prostrate = false;
         setIsProstrating(false);
-        setBowCount((prev) => prev + 1);
         prostratePhase = -1;
       }
     }
@@ -523,19 +521,16 @@ export const Character: React.FC = () => {
 
   return (
     <group ref={group}>
-      {/* 좌복 위에 올라섰을 때 나타나는 '절하기' 버튼 */}
-      {isOnCushion && (
+      {/* 좌복 위에 올라섰을 때만 나타나는 '절하기' 버튼 (절하는 동안에는 표시 숨김) */}
+      {isOnCushion && !isProstrating && (
         <Html position={[0, 1.52, 0]} center>
           <div style={{ pointerEvents: 'auto' }}>
             <button
               onClick={handleStartProstrate}
-              disabled={isProstrating}
               style={{
                 padding: '7px 18px',
                 borderRadius: 22,
-                background: isProstrating
-                  ? 'rgba(28, 25, 23, 0.82)'
-                  : 'linear-gradient(135deg, #991b1b 0%, #450a0a 100%)',
+                background: 'linear-gradient(135deg, #991b1b 0%, #450a0a 100%)',
                 color: '#fef3c7',
                 border: '1.5px solid #f59e0b',
                 boxShadow: '0 4px 14px rgba(0,0,0,0.38), 0 0 10px rgba(245, 158, 11, 0.3)',
@@ -543,7 +538,7 @@ export const Character: React.FC = () => {
                 fontWeight: 700,
                 fontFamily: "'Noto Serif KR', serif",
                 letterSpacing: 1,
-                cursor: isProstrating ? 'default' : 'pointer',
+                cursor: 'pointer',
                 whiteSpace: 'nowrap',
                 display: 'flex',
                 alignItems: 'center',
@@ -551,13 +546,7 @@ export const Character: React.FC = () => {
               }}
             >
               <span>🙇</span>
-              <span>
-                {isProstrating
-                  ? '배례(절) 올리는 중...'
-                  : bowCount > 0
-                    ? `절하기 (${bowCount}배)`
-                    : '절하기'}
-              </span>
+              <span>절하기</span>
             </button>
           </div>
         </Html>

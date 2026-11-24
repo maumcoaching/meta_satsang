@@ -23,7 +23,7 @@ export const Ground: React.FC = () => {
       { x: -12, z: 2, scale: 1.0 },
       { x: -8, z: 8, scale: 1.1 },
       { x: 9, z: -6, scale: 1.3 },
-      { x: 12, z: 3, scale: 0.95 },
+      { x: 17.2, z: 3, scale: 1.1 },
       { x: 8, z: 10, scale: 1.15 },
       { x: -5, z: -11, scale: 1.25 },
       { x: 6, z: -12, scale: 1.1 },

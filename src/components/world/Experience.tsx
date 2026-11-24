@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import { Environment } from './Environment';
 import { Ground } from './Ground';
+import { MountainStream } from './MountainStream';
 import { TempleDeck } from './TempleDeck';
 import { CircleDeck } from './CircleDeck';
 import { Geumgangjwa } from './Geumgangjwa';
@@ -15,6 +16,9 @@ export const Experience: React.FC = () => {
 
       {/* 대지, 디딤돌, 연못, 소나무 */}
       <Ground />
+
+      {/* 법당 오른쪽에서 북쪽 -> 남쪽으로 구비구비 흘러가는 산사 개천 */}
+      <MountainStream />
 
       {/* 대청마루, 기와지붕, 기둥, 풍경, 석등, 좌복 */}
       <TempleDeck />

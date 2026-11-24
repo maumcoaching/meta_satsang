@@ -19,6 +19,8 @@ export const RemotePlayer: React.FC<Props> = ({ player }) => {
   const rightHandRef = useRef<THREE.Group>(null);
   const leftLegRef = useRef<THREE.Group>(null);
   const rightLegRef = useRef<THREE.Group>(null);
+  const openEyesRef = useRef<THREE.Group>(null);
+  const closedEyesRef = useRef<THREE.Group>(null);
 
   const BASE_BODY_Y = 0.66;
   const currentPos = useRef(new THREE.Vector3(player.x, player.y, player.z));
@@ -152,6 +154,15 @@ export const RemotePlayer: React.FC<Props> = ({ player }) => {
         rightLegRef.current.rotation.set(0, 0, 0);
       }
     }
+
+    // 귀여운 눈 깜빡임 및 합장/좌선 시 평온한 반달 눈웃음 표정 전환
+    if (openEyesRef.current && closedEyesRef.current) {
+      const blinkCycle = (time + 1.3) % 3.8;
+      const isBlinking = blinkCycle > 3.64;
+      const showClosedSmileEyes = !!player.meditate || !!player.bow || isBlinking;
+      openEyesRef.current.visible = !showClosedSmileEyes;
+      closedEyesRef.current.visible = showClosedSmileEyes;
+    }
   });
 
   return (
@@ -192,42 +203,111 @@ export const RemotePlayer: React.FC<Props> = ({ player }) => {
         </mesh>
       )}
 
-      {/* 캐릭터 본체 (모자 없는 동글동글한 동자승 머리) */}
+      {/* 캐릭터 본체 (볼살이 통통하고 표정이 살아있는 귀여운 꼬마 동자승) */}
       <group ref={bodyRef} position={[0, BASE_BODY_Y, 0]}>
-        {/* 1. 동글동글한 민머리 */}
-        <mesh position={[0, 0.38, 0]} castShadow>
-          <sphereGeometry args={[0.24, 32, 32]} />
-          <meshStandardMaterial color="#fed7aa" roughness={0.7} />
+        {/* 1. 통통하고 귀여운 동자승 두상 (볼 쪽이 살짝 통통한 아기 비율) */}
+        <mesh position={[0, 0.38, 0]} scale={[1.05, 0.98, 1.02]} castShadow>
+          <sphereGeometry args={[0.245, 32, 32]} />
+          <meshStandardMaterial color="#ffe0bd" roughness={0.62} />
         </mesh>
 
-        {/* 2. 귀여운 양쪽 귀 */}
-        <mesh position={[-0.23, 0.38, 0]} rotation={[0, 0, -0.2]}>
-          <sphereGeometry args={[0.045, 12, 12]} />
-          <meshStandardMaterial color="#fed7aa" roughness={0.7} />
+        {/* 2. 동글동글한 양쪽 귀 & 발그레한 귓속 */}
+        <group position={[-0.25, 0.365, -0.01]} rotation={[0, 0, -0.18]}>
+          <mesh castShadow>
+            <sphereGeometry args={[0.048, 14, 14]} />
+            <meshStandardMaterial color="#ffe0bd" roughness={0.65} />
+          </mesh>
+          <mesh position={[-0.012, 0, 0.022]}>
+            <sphereGeometry args={[0.025, 10, 10]} />
+            <meshBasicMaterial color="#fda4af" transparent opacity={0.6} />
+          </mesh>
+        </group>
+        <group position={[0.25, 0.365, -0.01]} rotation={[0, 0, 0.18]}>
+          <mesh castShadow>
+            <sphereGeometry args={[0.048, 14, 14]} />
+            <meshStandardMaterial color="#ffe0bd" roughness={0.65} />
+          </mesh>
+          <mesh position={[0.012, 0, 0.022]}>
+            <sphereGeometry args={[0.025, 10, 10]} />
+            <meshBasicMaterial color="#fda4af" transparent opacity={0.6} />
+          </mesh>
+        </group>
+
+        {/* 3. 순하고 귀여운 동글 눈썹 */}
+        <mesh position={[-0.082, 0.432, 0.228]} rotation={[0, -0.22, 0.12]}>
+          <capsuleGeometry args={[0.007, 0.032, 6, 10]} />
+          <meshBasicMaterial color="#5c4033" />
         </mesh>
-        <mesh position={[0.23, 0.38, 0]} rotation={[0, 0, 0.2]}>
-          <sphereGeometry args={[0.045, 12, 12]} />
-          <meshStandardMaterial color="#fed7aa" roughness={0.7} />
+        <mesh position={[0.082, 0.432, 0.228]} rotation={[0, 0.22, -0.12]}>
+          <capsuleGeometry args={[0.007, 0.032, 6, 10]} />
+          <meshBasicMaterial color="#5c4033" />
         </mesh>
 
-        {/* 3. 눈 (온화하고 차분한 눈) */}
-        <mesh position={[-0.07, 0.4, 0.21]} rotation={[0, -0.15, 0]}>
-          <sphereGeometry args={[0.022, 12, 12]} />
-          <meshBasicMaterial color="#2d3748" />
-        </mesh>
-        <mesh position={[0.07, 0.4, 0.21]} rotation={[0, 0.15, 0]}>
-          <sphereGeometry args={[0.022, 12, 12]} />
-          <meshBasicMaterial color="#2d3748" />
+        {/* 4-A. 평소 초롱초롱하게 반짝이는 큰 눈망울 (하이라이트 2개 포함) */}
+        <group ref={openEyesRef}>
+          <group position={[-0.082, 0.375, 0.232]} rotation={[0, -0.22, 0]}>
+            <mesh scale={[1.0, 1.12, 0.55]}>
+              <sphereGeometry args={[0.029, 16, 16]} />
+              <meshBasicMaterial color="#1e1b18" />
+            </mesh>
+            <mesh position={[-0.009, 0.011, 0.014]}>
+              <sphereGeometry args={[0.0095, 10, 10]} />
+              <meshBasicMaterial color="#ffffff" />
+            </mesh>
+            <mesh position={[0.009, -0.010, 0.014]}>
+              <sphereGeometry args={[0.0048, 8, 8]} />
+              <meshBasicMaterial color="#ffffff" />
+            </mesh>
+          </group>
+
+          <group position={[0.082, 0.375, 0.232]} rotation={[0, 0.22, 0]}>
+            <mesh scale={[1.0, 1.12, 0.55]}>
+              <sphereGeometry args={[0.029, 16, 16]} />
+              <meshBasicMaterial color="#1e1b18" />
+            </mesh>
+            <mesh position={[-0.009, 0.011, 0.014]}>
+              <sphereGeometry args={[0.0095, 10, 10]} />
+              <meshBasicMaterial color="#ffffff" />
+            </mesh>
+            <mesh position={[0.009, -0.010, 0.014]}>
+              <sphereGeometry args={[0.0048, 8, 8]} />
+              <meshBasicMaterial color="#ffffff" />
+            </mesh>
+          </group>
+        </group>
+
+        {/* 4-B. 눈 깜빡이거나 합장/좌선할 때 방긋 웃는 반달 눈웃음 (⌒ ⌒) */}
+        <group ref={closedEyesRef} visible={false}>
+          <mesh position={[-0.082, 0.368, 0.236]} rotation={[-0.1, -0.22, 0.05]}>
+            <torusGeometry args={[0.024, 0.0055, 10, 20, Math.PI]} />
+            <meshBasicMaterial color="#292524" />
+          </mesh>
+          <mesh position={[0.082, 0.368, 0.236]} rotation={[-0.1, 0.22, -0.05]}>
+            <torusGeometry args={[0.024, 0.0055, 10, 20, Math.PI]} />
+            <meshBasicMaterial color="#292524" />
+          </mesh>
+        </group>
+
+        {/* 5. 앙증맞은 아기 코 */}
+        <mesh position={[0, 0.352, 0.248]} scale={[1.2, 0.85, 0.7]}>
+          <sphereGeometry args={[0.012, 10, 10]} />
+          <meshStandardMaterial color="#f5b895" roughness={0.6} />
         </mesh>
 
-        {/* 4. 연분홍 볼터치 */}
-        <mesh position={[-0.13, 0.34, 0.19]}>
-          <sphereGeometry args={[0.03, 10, 10]} />
-          <meshBasicMaterial color="#fda4af" transparent opacity={0.65} />
+        {/* 6. 방긋 웃는 귀여운 아기 미소 입매 (◡) */}
+        <mesh position={[0, 0.328, 0.241]} rotation={[0.18, 0, Math.PI]}>
+          <torusGeometry args={[0.025, 0.006, 10, 24, Math.PI]} />
+          <meshBasicMaterial color="#be123c" />
         </mesh>
-        <mesh position={[0.13, 0.34, 0.19]}>
-          <sphereGeometry args={[0.03, 10, 10]} />
-          <meshBasicMaterial color="#fda4af" transparent opacity={0.65} />
+
+        {/* 7. 발그레한 복숭아빛 통통 볼터치 */}
+        <mesh position={[-0.135, 0.340, 0.208]} rotation={[0.08, -0.45, 0]} scale={[1.35, 0.85, 0.4]}>
+          <sphereGeometry args={[0.032, 14, 14]} />
+          <meshBasicMaterial color="#fb7185" transparent opacity={0.55} />
+        </mesh>
+        <mesh position={[0.135, 0.340, 0.208]} rotation={[0.08, 0.45, 0]} scale={[1.35, 0.85, 0.4]}>
+          <sphereGeometry args={[0.032, 14, 14]} />
+          <meshBasicMaterial color="#fb7185" transparent opacity={0.55} />
         </mesh>
 
         {/* 5. 승복 몸통 (도포 / 가사 - 양옆 팔이 또렷하게 드러나도록 단정한 핏) */}

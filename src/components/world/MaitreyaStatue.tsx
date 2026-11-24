@@ -26,13 +26,16 @@ export const MaitreyaStatue: React.FC<Props> = ({
     return found;
   }, [scene]);
 
-  // 2. 실제 사진 속 청동 반가사유상의 깊이감 있는 앤틱 청동 파티나(Bronze Patina) 재질
+  // 2. 실제 사진 속 청동 반가사유상의 밝고 은은한 청동 파티나(Bright Bronze Patina) 재질
+  // 이목구비와 미소, 옷주름 음영이 그늘에서도 환하고 또렷하게 드러나도록 밝기 및 반사도 최적화
   const bronzeMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: '#4e5d55',
-        roughness: 0.42,
-        metalness: 0.52,
+        color: '#82968a',
+        roughness: 0.45,
+        metalness: 0.22,
+        emissive: '#252e29',
+        emissiveIntensity: 0.28,
       }),
     []
   );

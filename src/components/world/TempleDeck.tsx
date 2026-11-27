@@ -200,6 +200,14 @@ export const TempleDeck: React.FC = () => {
     () => new THREE.MeshStandardMaterial({ color: '#27303f', roughness: 0.65 }),
     []
   );
+  // 법당 우측면 기둥 사이 2칸 크기로 걸리는 마하반야바라밀다심경(반야심경) 고화질 텍스처
+  const heartSutraTexture = useMemo(() => {
+    const loader = new THREE.TextureLoader();
+    const tex = loader.load('/textures/heart_sutra.jpg');
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 16;
+    return tex;
+  }, []);
 
   return (
     <group position={[0, 0, 0]}>
@@ -297,7 +305,7 @@ export const TempleDeck: React.FC = () => {
         ))}
       </group>
 
-      {/* 우측 벽 (x = +6.6) */}
+      {/* 우측 벽 (x = +6.6) & 기둥 사이 2칸을 차지하는 대형 마하반야바라밀다심경 액자 */}
       <group position={[6.6, 0.45, -0.2]}>
         <mesh position={[0, 0.6, 0]} receiveShadow material={wallWoodMaterial}>
           <boxGeometry args={[0.15, 1.2, 12.8]} />
@@ -310,6 +318,27 @@ export const TempleDeck: React.FC = () => {
             <boxGeometry args={[0.05, 2.2, 0.1]} />
           </mesh>
         ))}
+
+        {/* 우측 벽 중앙 기둥(z=-2.2 ~ +2.2) 사이 2칸 전체를 채우는 대형 반야심경 목조 액자 */}
+        <group
+          position={[-0.12, 2.25, 0.2]}
+          rotation={[0, -Math.PI / 2, 0]}
+          onClick={(e) => {
+            e.stopPropagation();
+            sound.playSingingBowl();
+          }}
+        >
+          {/* 원목 액자 틀 (가로 4.0m x 세로 2.46m — 기둥과 기둥 사이 두 칸 크기) */}
+          <mesh castShadow>
+            <boxGeometry args={[4.02, 2.48, 0.08]} />
+            <meshStandardMaterial color="#8c5830" roughness={0.65} />
+          </mesh>
+          {/* 마하반야바라밀다심경 본문 화선지 면 (조명 왜곡 없이 원본 사진 그대로 선명하게 표시) */}
+          <mesh position={[0, 0, 0.045]}>
+            <planeGeometry args={[3.86, 2.32]} />
+            <meshBasicMaterial map={heartSutraTexture} />
+          </mesh>
+        </group>
       </group>
 
       {/* ===================================================================
